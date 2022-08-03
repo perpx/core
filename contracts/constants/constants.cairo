@@ -1,0 +1,2 @@
+const MAX_PRICE = 10000000
+const MAX_SIZE = 2 ** 250 / MAX_PRICE
