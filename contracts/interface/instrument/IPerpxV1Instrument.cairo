@@ -60,6 +60,7 @@ namespace IPerpxV1Instrument:
     # @return fee The fee of the instrument
     func fee() -> (fee : felt):
     end
+    ################################################################################
 
     # OWNER
 
