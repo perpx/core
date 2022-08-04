@@ -2,9 +2,9 @@
 
 from starkware.cairo.common.uint256 import Uint256
 from starkware.cairo.common.cairo_builtins import HashBuiltin
-from starkware.cairo.common.math import assert_le
+from starkware.cairo.common.math import assert_lt_felt
 
-from contracts.constants.constants import MAX_SIZE
+from contracts.constants.perpx_constants import MAX_SIZE
 # @title Position
 # @notice Position represents an owner's position in an instrument
 
@@ -34,9 +34,7 @@ func settle{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
 ) -> (delta : felt):
     let (info) = positions.read(address)
     # TODO check size < max(felt)/max(price) = max(size) during trade
-    tempvar delta = price * info.size  # use tempvar to bypass <compound-expr> created if using let
-    delta = delta - info.cost
-    delta = delta - info.fees
+    tempvar delta = price * info.size - info.cost - info.fees  # use tempvar to bypass <compound-expr> created if using let
 
     positions.write(address, Info(0, 0, 0))
     return (delta)
@@ -49,18 +47,20 @@ func update{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
     let (info) = positions.read(address)
 
     with_attr error_message("total position size limited to {MAX_SIZE}."):
-        assert_le(amount, MAX_SIZE - info.size)
+        assert_lt_felt(amount, MAX_SIZE - info.size)
     end
 
     let size = info.size + amount
 
-    tempvar cost_inc = price * amount
-    info.cost = info.cost + cost_inc
+    tempvar cost_inc = price * amount + info.cost
+    let cost = info.cost + cost_inc
 
-    tempvar fees_inc = cost_inc * feeBps
-    info.fees = info.fees + fees_inc
+    # TODO take abs of cost_inc and signed_div_rem
+    # Problem: when performing a abs value, fees_inc must be [0, rc_bound)
+    # Problem: when performing a signed_div_rem, the quotient will be in [0, bound) (bound limited to rc_bound)
+    tempvar fees = cost_inc * feeBps + info.fees
 
-    positions.write(address, Info(info.fees, info.cost, size))
+    positions.write(address, Info(fees, cost, size))
     return ()
 end
 
@@ -74,12 +74,11 @@ func liquidate{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr
     let (info) = positions.read(address)
 
     tempvar cost_inc = (-info.size) * price
-    info.cost = info.cost + cost_inc
+    let cost = info.cost + cost_inc
 
-    tempvar fees_inc = cost_inc * feeBps
-    info.fees = info.fees + fees_inc
+    tempvar fees = cost_inc * feeBps + info.fees
 
-    positions.write(address, Info(info.fees, info.cost, 0))
+    positions.write(address, Info(fees, cost, 0))
     let (delta) = settle(address, price)
 
     return (delta)
