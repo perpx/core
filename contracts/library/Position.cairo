@@ -1,10 +1,10 @@
 %lang starknet
 
-from starkware.cairo.common.uint256 import Uint256
 from starkware.cairo.common.cairo_builtins import HashBuiltin
-from starkware.cairo.common.math import assert_lt_felt
+from starkware.cairo.common.math import unsigned_div_rem, abs_value
 
-from contracts.constants.perpx_constants import MAX_SIZE
+from contracts.constants.perpx_constants import MAX_PRICE, MAX_AMOUNT, MAX_BOUND
+
 # @title Position
 # @notice Position represents an owner's position in an instrument
 
@@ -40,25 +40,26 @@ func settle{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
     return (delta)
 end
 
+# TODO perform range bound checks
 # @notice Update position size
 func update{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
     address : felt, price : felt, amount : felt, feeBps : felt
 ) -> ():
+    alloc_locals
     let (info) = positions.read(address)
-
-    with_attr error_message("total position size limited to {MAX_SIZE}."):
-        assert_lt_felt(amount, MAX_SIZE - info.size)
-    end
 
     let size = info.size + amount
 
-    tempvar cost_inc = price * amount + info.cost
+    tempvar cost_inc = price * amount
     let cost = info.cost + cost_inc
 
-    # TODO take abs of cost_inc and signed_div_rem
-    # Problem: when performing a abs value, fees_inc must be [0, rc_bound)
-    # Problem: when performing a signed_div_rem, the quotient will be in [0, bound) (bound limited to rc_bound)
-    tempvar fees = cost_inc * feeBps + info.fees
+    let (abs_val) = abs_value(cost_inc)
+    let fees_inc = abs_val * feeBps
+    let (fee_inc, _) = unsigned_div_rem(fees_inc, 10000)
+    tempvar fees = fee_inc + info.fees
+
+    # check ranges for position state
+    range_checks(amount, price, size, cost, fees)
 
     positions.write(address, Info(fees, cost, size))
     return ()
@@ -76,10 +77,41 @@ func liquidate{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr
     tempvar cost_inc = (-info.size) * price
     let cost = info.cost + cost_inc
 
+    # TODO divide by 10_000
     tempvar fees = cost_inc * feeBps + info.fees
 
     positions.write(address, Info(fees, cost, 0))
     let (delta) = settle(address, price)
 
     return (delta)
+end
+
+# @notice Performs range checks on the position state
+# @param amount The amount traded
+# @param size The size of the position after trade
+# @param cost The cost of the position after trade
+# @param fees The fees of the position after trade
+func range_checks{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+    amount : felt, price : felt, size : felt, cost : felt, fees : felt
+) -> ():
+    # check amount is within bounds
+    assert [range_check_ptr] = amount + MAX_AMOUNT
+    assert [range_check_ptr + 1] = MAX_AMOUNT - amount
+
+    # check price is within bounds
+    [range_check_ptr + 2] = price
+    assert [range_check_ptr + 3] = MAX_PRICE - price
+
+    # check size is within bounds
+    assert [range_check_ptr + 4] = size + MAX_AMOUNT
+    assert [range_check_ptr + 5] = MAX_AMOUNT - size
+
+    # check cost is within bounds
+    assert [range_check_ptr + 6] = cost + MAX_BOUND
+    assert [range_check_ptr + 7] = MAX_BOUND - cost
+
+    [range_check_ptr + 8] = fees
+
+    let range_check_ptr = range_check_ptr + 9
+    return ()
 end

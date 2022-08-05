@@ -10,4 +10,7 @@ module.exports = {
             url: 'http://127.0.0.1:5050',
         },
     },
+    mocha: {
+        timeout: 100000,
+    },
 }
