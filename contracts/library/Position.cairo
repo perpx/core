@@ -96,22 +96,16 @@ func range_checks{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_
 ) -> ():
     # check amount is within bounds
     assert [range_check_ptr] = amount + MAX_AMOUNT
-    assert [range_check_ptr + 1] = MAX_AMOUNT - amount
+    assert [range_check_ptr + 1] = MAX_AMOUNT - amount - 1
 
     # check price is within bounds
     [range_check_ptr + 2] = price
-    assert [range_check_ptr + 3] = MAX_PRICE - price
+    assert [range_check_ptr + 3] = MAX_PRICE - price - 1
 
     # check size is within bounds
     assert [range_check_ptr + 4] = size + MAX_AMOUNT
-    assert [range_check_ptr + 5] = MAX_AMOUNT - size
+    assert [range_check_ptr + 5] = MAX_AMOUNT - size - 1
 
-    # check cost is within bounds
-    assert [range_check_ptr + 6] = cost + MAX_BOUND
-    assert [range_check_ptr + 7] = MAX_BOUND - cost
-
-    [range_check_ptr + 8] = fees
-
-    let range_check_ptr = range_check_ptr + 9
+    let range_check_ptr = range_check_ptr + 6
     return ()
 end
