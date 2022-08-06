@@ -8,7 +8,7 @@ import { starknet } from 'hardhat'
 import {
     POSITION_BASE_TEST_CASE,
     POSITION_REVERT_TEST_CASE,
-    TestCasePosition,
+    POSITION_LIMIT_TEST_CASE,
 } from './PositionTestCases'
 import { InvokeResponse } from '@shardlabs/starknet-hardhat-plugin/dist/src/types'
 
@@ -75,6 +75,46 @@ describe('#update', () => {
         }
     })
 
+    it('should pass with for each limit case', async () => {
+        for (const limitCase of POSITION_LIMIT_TEST_CASE) {
+            let size: bigint = 0n
+            let cost: bigint = 0n
+            let fees: bigint = 0n
+            for (const cas of limitCase) {
+                const args: StringMap = {
+                    address: address,
+                    price: cas.price,
+                    amount: cas.amount,
+                    feeBps: cas.feeBps,
+                }
+                await contract.invoke('update_test', args)
+                const pos = await getPosition(address)
+                size += BigInt(cas.amount)
+                const costInc = BigInt(cas.amount * cas.price)
+                cost += costInc
+                fees += (abs(costInc) * cas.feeBps) / 10_000n
+                expect(pos.position.fees).to.equal(
+                    fees,
+                    `failed on fees ${cas.description}`
+                )
+                expect(pos.position.cost).to.equal(
+                    cost,
+                    `failed on cost ${cas.description}`
+                )
+                expect(pos.position.size).to.equal(
+                    size,
+                    `failed on size ${cas.description}`
+                )
+            }
+            console.log('settle')
+            const arg: StringMap = {
+                address: address,
+                price: 0,
+            }
+            await contract.invoke('settle_test', arg)
+        }
+    })
+
     it('should fail for each base case', async () => {
         for (const failScenario of POSITION_REVERT_TEST_CASE) {
             let args: StringMap
@@ -118,5 +158,4 @@ describe('#update', () => {
             }
         }
     })
-    // TODO define passing limits test cases.
 })

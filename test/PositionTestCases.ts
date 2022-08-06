@@ -210,4 +210,71 @@ const POSITION_REVERT_TEST_CASE: TestCasePosition[][] = [
     ],
 ]
 
-export { TestCasePosition, POSITION_BASE_TEST_CASE, POSITION_REVERT_TEST_CASE }
+const POSITION_LIMIT_TEST_CASE: TestCasePosition[][] = [
+    [
+        {
+            description: 'price 1, amount 2**82 - 1, feeBps 0',
+            price: BigInt(1),
+            amount: BigInt(2 ** 82) - BigInt(1),
+            feeBps: BigInt(0),
+            error: '',
+        },
+    ],
+    [
+        {
+            description: 'price 1, amount -2**82 + 1, feeBps 0',
+            price: BigInt(1),
+            amount: -BigInt(2 ** 82) + BigInt(1),
+            feeBps: BigInt(0),
+            error: '',
+        },
+    ],
+    [
+        {
+            description: 'price 10**13 - 1, amount 1, feeBps 1',
+            price: BigInt(10 ** 13) - BigInt(1),
+            amount: BigInt(1),
+            feeBps: BigInt(1),
+            error: '',
+        },
+    ],
+    [
+        {
+            description: 'price 1, amount 2**81, feeBps 1',
+            price: BigInt(1),
+            amount: BigInt(2 ** 81),
+            feeBps: BigInt(1),
+            error: '',
+        },
+        {
+            description: 'price 1, amount 2**81 - 1, feeBps 1',
+            price: BigInt(1),
+            amount: BigInt(2 ** 81) - BigInt(1),
+            feeBps: BigInt(1),
+            error: '',
+        },
+    ],
+    [
+        {
+            description: 'price 1, amount -2**81, feeBps 1',
+            price: BigInt(1),
+            amount: -BigInt(2 ** 81),
+            feeBps: BigInt(1),
+            error: '',
+        },
+        {
+            description: 'price 1, amount -2**81, feeBps 1',
+            price: BigInt(1),
+            amount: -BigInt(2 ** 81),
+            feeBps: BigInt(1),
+            error: '',
+        },
+    ],
+]
+
+export {
+    TestCasePosition,
+    POSITION_BASE_TEST_CASE,
+    POSITION_REVERT_TEST_CASE,
+    POSITION_LIMIT_TEST_CASE,
+}
