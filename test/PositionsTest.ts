@@ -10,6 +10,7 @@ import {
     POSITION_REVERT_TEST_CASE,
     TestCasePosition,
 } from './PositionTestCases'
+import { InvokeResponse } from '@shardlabs/starknet-hardhat-plugin/dist/src/types'
 
 let contract: StarknetContract
 let address: bigint
@@ -48,37 +49,38 @@ describe('#update', () => {
         expect(pos.position.size).to.equal(0n)
     })
 
-    // it('should pass with for each base case', async () => {
-    //     for (const baseCase of POSITION_BASE_TEST_CASE) {
-    //         const args: StringMap = {
-    //             address: address,
-    //             price: baseCase.price,
-    //             amount: baseCase.amount,
-    //             feeBps: baseCase.feeBps,
-    //         }
-    //         await contract.invoke('update_test', args)
-    //         const pos = await getPosition(address)
-    //         const cost = baseCase.amount * baseCase.price
-    //         const fees = (abs(cost) * baseCase.feeBps) / 10_000n
-    //         expect(pos.position.fees).to.equal(fees, 'failed on fees')
-    //         expect(pos.position.cost).to.equal(cost, 'failed on cost')
-    //         expect(pos.position.size).to.equal(
-    //             baseCase.amount,
-    //             'failed on size'
-    //         )
-    //         const arg: StringMap = {
-    //             address: address,
-    //             price: 0,
-    //         }
-    //         await contract.invoke('settle_test', arg)
-    //     }
-    // })
+    it('should pass with for each base case', async () => {
+        for (const baseCase of POSITION_BASE_TEST_CASE) {
+            const args: StringMap = {
+                address: address,
+                price: baseCase.price,
+                amount: baseCase.amount,
+                feeBps: baseCase.feeBps,
+            }
+            await contract.invoke('update_test', args)
+            const pos = await getPosition(address)
+            const cost = baseCase.amount * baseCase.price
+            const fees = (abs(cost) * baseCase.feeBps) / 10_000n
+            expect(pos.position.fees).to.equal(fees, 'failed on fees')
+            expect(pos.position.cost).to.equal(cost, 'failed on cost')
+            expect(pos.position.size).to.equal(
+                baseCase.amount,
+                'failed on size'
+            )
+            const arg: StringMap = {
+                address: address,
+                price: 0,
+            }
+            await contract.invoke('settle_test', arg)
+        }
+    })
 
     it('should fail for each base case', async () => {
         for (const failScenario of POSITION_REVERT_TEST_CASE) {
             let args: StringMap
             let index: number = 0
-            for (let i = 0; failScenario[i].error.length == 0; i++) {
+            let passed: boolean = false
+            for (let i = 0; failScenario[i].error === ''; i++) {
                 args = {
                     address: address,
                     price: failScenario[i].price,
@@ -87,6 +89,7 @@ describe('#update', () => {
                 }
                 await contract.invoke('update_test', args)
                 index = i + 1
+                passed = true
             }
             try {
                 args = {
@@ -97,8 +100,7 @@ describe('#update', () => {
                 }
                 await contract.invoke('update_test', args)
                 expect.fail(
-                    'should have failed with',
-                    failScenario[index].description
+                    `should have failed with ${failScenario[index].description}`
                 )
             } catch (error: any) {
                 expect(error.message).to.contain(
@@ -106,6 +108,15 @@ describe('#update', () => {
                     failScenario[index].description
                 )
             }
+            if (passed) {
+                args = {
+                    address: address,
+                    price: 0,
+                }
+                await contract.invoke('settle_test', args)
+                passed = false
+            }
         }
     })
+    // TODO define passing limits test cases.
 })
