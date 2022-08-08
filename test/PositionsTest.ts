@@ -6,10 +6,14 @@ import {
 import { expect } from 'chai'
 import { starknet } from 'hardhat'
 import {
-    POSITION_BASE_TEST_CASE,
-    POSITION_REVERT_TEST_CASE,
-    POSITION_LIMIT_TEST_CASE,
-} from './PositionTestCases'
+    POSITION_UPDATE_BASE_TEST_CASES,
+    POSITION_UPDATE_REVERT_TEST_CASES,
+    POSITION_UPDATE_LIMIT_TEST_CASES,
+} from './test-cases/PositionUpdateTestCases'
+import {
+    POSITION_LIQUIDATE_BASE_TEST_CASES,
+    POSITION_LIQUIDATE_LIMIT_TEST_CASES,
+} from './test-cases/PositionLiquidateTestCases'
 import { InvokeResponse } from '@shardlabs/starknet-hardhat-plugin/dist/src/types'
 
 let contract: StarknetContract
@@ -42,7 +46,7 @@ before(async () => {
 })
 
 describe('#update', () => {
-    it('it should pass with an empty position', async () => {
+    it('should pass with an empty position', async () => {
         const pos = await getPosition(address)
         expect(pos.position.fees).to.equal(0n)
         expect(pos.position.cost).to.equal(0n)
@@ -50,7 +54,8 @@ describe('#update', () => {
     })
 
     it('should pass with for each base case', async () => {
-        for (const baseCase of POSITION_BASE_TEST_CASE) {
+        for (const baseCase of POSITION_UPDATE_BASE_TEST_CASES) {
+            console.log(baseCase.description)
             const args: StringMap = {
                 address: address,
                 price: baseCase.price,
@@ -76,7 +81,7 @@ describe('#update', () => {
     })
 
     it('should pass with for each limit case', async () => {
-        for (const limitCase of POSITION_LIMIT_TEST_CASE) {
+        for (const limitCase of POSITION_UPDATE_LIMIT_TEST_CASES) {
             let size: bigint = 0n
             let cost: bigint = 0n
             let fees: bigint = 0n
@@ -90,9 +95,12 @@ describe('#update', () => {
                 await contract.invoke('update_test', args)
                 const pos = await getPosition(address)
                 size += BigInt(cas.amount)
-                const costInc = BigInt(cas.amount * cas.price)
+                const costInc = cas.amount * cas.price
                 cost += costInc
                 fees += (abs(costInc) * cas.feeBps) / 10_000n
+                if (pos.position.cost > prime / BigInt(2)) {
+                    pos.position.cost = pos.position.cost - prime
+                }
                 expect(pos.position.fees).to.equal(
                     fees,
                     `failed on fees ${cas.description}`
@@ -106,7 +114,6 @@ describe('#update', () => {
                     `failed on size ${cas.description}`
                 )
             }
-            console.log('settle')
             const arg: StringMap = {
                 address: address,
                 price: 0,
@@ -115,8 +122,8 @@ describe('#update', () => {
         }
     })
 
-    it('should fail for each base case', async () => {
-        for (const failScenario of POSITION_REVERT_TEST_CASE) {
+    it('should fail for each revert case', async () => {
+        for (const failScenario of POSITION_UPDATE_REVERT_TEST_CASES) {
             let args: StringMap
             let index: number = 0
             let passed: boolean = false
@@ -156,6 +163,79 @@ describe('#update', () => {
                 await contract.invoke('settle_test', args)
                 passed = false
             }
+        }
+    })
+})
+
+// liquidate calls settle
+describe('#liquidate #settle', () => {
+    it('should pass for all base cases', async () => {
+        for (const baseCase of POSITION_LIQUIDATE_BASE_TEST_CASES) {
+            let size: bigint = BigInt(0)
+            let cost: bigint = BigInt(0)
+            let fees: bigint = BigInt(0)
+            for (const update of baseCase.positionUpdate) {
+                const args: StringMap = {
+                    address: address,
+                    price: update.price,
+                    amount: update.amount,
+                    feeBps: update.feeBps,
+                }
+                await contract.invoke('update_test', args)
+                size += update.amount
+                const costInc: bigint = update.price * update.amount
+                cost += costInc
+                fees += (abs(costInc) * update.feeBps) / 10_000n
+            }
+            const args: StringMap = {
+                address: address,
+                price: baseCase.price,
+                feeBps: baseCase.feeBps,
+            }
+            await contract.invoke('liquidate_test', args)
+            const costInc: bigint = -size * baseCase.price
+            cost += costInc
+            fees += (abs(costInc) * baseCase.feeBps) / 10_000n
+            const delta = -cost - fees
+            const resp = await contract.call('view_delta')
+            expect(resp.delt).to.equal(delta)
+        }
+    })
+
+    it('should pass for all limit cases', async () => {
+        for (const limitCase of POSITION_LIQUIDATE_LIMIT_TEST_CASES) {
+            console.log(limitCase.description)
+            let size: bigint = BigInt(0)
+            let cost: bigint = BigInt(0)
+            let fees: bigint = BigInt(0)
+            for (const update of limitCase.positionUpdate) {
+                const args: StringMap = {
+                    address: address,
+                    price: update.price,
+                    amount: update.amount,
+                    feeBps: update.feeBps,
+                }
+                await contract.invoke('update_test', args)
+                size += update.amount
+                const costInc: bigint = update.price * update.amount
+                cost += costInc
+                fees += (abs(costInc) * update.feeBps) / 10_000n
+            }
+            const args: StringMap = {
+                address: address,
+                price: limitCase.price,
+                feeBps: limitCase.feeBps,
+            }
+            await contract.invoke('liquidate_test', args)
+            const costInc: bigint = -size * limitCase.price
+            cost += costInc
+            fees += (abs(costInc) * limitCase.feeBps) / 10_000n
+            const delta = -cost - fees
+            const resp = await contract.call('view_delta')
+            if (resp.delt > prime / BigInt(2)) {
+                resp.delt = resp.delt - prime
+            }
+            expect(resp.delt).to.equal(delta)
         }
     })
 })

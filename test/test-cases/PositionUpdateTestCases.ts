@@ -1,128 +1,88 @@
-interface TestCasePosition {
+interface PositionUpdateTestCase {
     description: string
     price: bigint
     amount: bigint
     feeBps: bigint
-    error: string
+    error?: string
 }
 
-const POSITION_BASE_TEST_CASE: TestCasePosition[] = [
+const POSITION_UPDATE_BASE_TEST_CASES: PositionUpdateTestCase[] = [
     {
         description: 'price 0, amount 0, feeBps 0',
         price: BigInt(0),
         amount: BigInt(0),
         feeBps: BigInt(0),
-        error: '',
     },
     {
         description: 'price 1500, amount 0, feeBps 0',
         price: BigInt(1_500),
         amount: BigInt(0),
         feeBps: BigInt(0),
-        error: '',
     },
     {
         description: 'price 0, amount 10, feeBps 0',
         price: BigInt(0),
         amount: BigInt(10),
         feeBps: BigInt(0),
-        error: '',
     },
     {
         description: 'price 0, amount 0, feeBps 100',
         price: BigInt(0),
         amount: BigInt(0),
         feeBps: BigInt(100),
-        error: '',
     },
     {
         description: 'price 1500, amount 10, feeBps 0',
         price: BigInt(1_500),
         amount: BigInt(10),
         feeBps: BigInt(0),
-        error: '',
     },
     {
         description: 'price 0, amount 10, feeBps 100',
         price: BigInt(0),
         amount: BigInt(10),
         feeBps: BigInt(100),
-        error: '',
     },
     {
         description: 'price 1500, amount 0, feeBps 100',
         price: BigInt(1_500),
         amount: BigInt(0),
         feeBps: BigInt(100),
-        error: '',
     },
     {
         description: 'price 1500, amount 10, feeBps 100',
         price: BigInt(1_500),
         amount: BigInt(10),
         feeBps: BigInt(100),
-        error: '',
     },
     // negative values
-    {
-        description: 'price 0, amount 0, feeBps 0',
-        price: BigInt(0),
-        amount: BigInt(0),
-        feeBps: BigInt(0),
-        error: '',
-    },
-    {
-        description: 'price 1500, amount 0, feeBps 0',
-        price: BigInt(1_500),
-        amount: BigInt(0),
-        feeBps: BigInt(0),
-        error: '',
-    },
     {
         description: 'price 0, amount -10, feeBps 0',
         price: BigInt(0),
         amount: BigInt(-10),
         feeBps: BigInt(0),
-        error: '',
-    },
-    {
-        description: 'price 0, amount 0, feeBps 100',
-        price: BigInt(0),
-        amount: BigInt(0),
-        feeBps: BigInt(100),
-        error: '',
     },
     {
         description: 'price 1500, amount -10, feeBps 0',
         price: BigInt(1_500),
         amount: BigInt(-10),
         feeBps: BigInt(0),
-        error: '',
     },
     {
         description: 'price 0, amount -10, feeBps 100',
         price: BigInt(0),
         amount: BigInt(-10),
         feeBps: BigInt(100),
-        error: '',
-    },
-    {
-        description: 'price 1500, amount 0, feeBps 100',
-        price: BigInt(1_500),
-        amount: BigInt(0),
-        feeBps: BigInt(100),
-        error: '',
     },
     {
         description: 'price 1500, amount -10, feeBps 100',
         price: BigInt(1_500),
         amount: BigInt(-10),
         feeBps: BigInt(100),
-        error: '',
     },
 ]
 
-const POSITION_REVERT_TEST_CASE: TestCasePosition[][] = [
+const POSITION_UPDATE_REVERT_TEST_CASES: PositionUpdateTestCase[][] = [
     [
         {
             description:
@@ -210,71 +170,108 @@ const POSITION_REVERT_TEST_CASE: TestCasePosition[][] = [
     ],
 ]
 
-const POSITION_LIMIT_TEST_CASE: TestCasePosition[][] = [
+const POSITION_UPDATE_LIMIT_TEST_CASES: PositionUpdateTestCase[][] = [
     [
         {
-            description: 'price 1, amount 2**82 - 1, feeBps 0',
+            description: 'price 1, amount 2**82 - 1, feeBps 10_000',
             price: BigInt(1),
             amount: BigInt(2 ** 82) - BigInt(1),
-            feeBps: BigInt(0),
-            error: '',
+            feeBps: BigInt(10_000),
         },
     ],
     [
         {
-            description: 'price 1, amount -2**82 + 1, feeBps 0',
+            description: 'price 1, amount -2**82 + 1, feeBps 10_000',
             price: BigInt(1),
             amount: -BigInt(2 ** 82) + BigInt(1),
-            feeBps: BigInt(0),
-            error: '',
+            feeBps: BigInt(10_000),
         },
     ],
     [
         {
-            description: 'price 10**13 - 1, amount 1, feeBps 1',
+            description: 'price 10**13 - 1, amount 1, feeBps 10_000',
             price: BigInt(10 ** 13) - BigInt(1),
             amount: BigInt(1),
-            feeBps: BigInt(1),
-            error: '',
+            feeBps: BigInt(10_000),
         },
     ],
     [
         {
-            description: 'price 1, amount 2**81, feeBps 1',
+            description: 'price 1, amount 2**81, feeBps 10_000',
             price: BigInt(1),
             amount: BigInt(2 ** 81),
-            feeBps: BigInt(1),
-            error: '',
+            feeBps: BigInt(10_000),
         },
         {
-            description: 'price 1, amount 2**81 - 1, feeBps 1',
+            description: 'price 1, amount 2**81 - 1, feeBps 10_000',
             price: BigInt(1),
             amount: BigInt(2 ** 81) - BigInt(1),
-            feeBps: BigInt(1),
-            error: '',
+            feeBps: BigInt(10_000),
         },
     ],
     [
         {
-            description: 'price 1, amount -2**81, feeBps 1',
+            description: 'price 1, amount -2**81, feeBps 10_000',
             price: BigInt(1),
             amount: -BigInt(2 ** 81),
-            feeBps: BigInt(1),
-            error: '',
+            feeBps: BigInt(10_000),
         },
         {
-            description: 'price 1, amount -2**81, feeBps 1',
+            description: 'price 1, amount -2**81, feeBps 10_000',
             price: BigInt(1),
             amount: -BigInt(2 ** 81),
-            feeBps: BigInt(1),
-            error: '',
+            feeBps: BigInt(10_000),
+        },
+    ],
+    [
+        {
+            description: 'price 10**13 - 1, amount 2**81 - 1, feeBps 10_000',
+            price: BigInt(10 ** 13) - BigInt(1),
+            amount: BigInt(2 ** 81) - BigInt(1),
+            feeBps: BigInt(10_000),
+        },
+        {
+            description: 'price 10**13 - 1, amount 2**81 - 1, feeBps 10_000',
+            price: BigInt(10 ** 13) - BigInt(1),
+            amount: BigInt(2 ** 81) - BigInt(1),
+            feeBps: BigInt(10_000),
+        },
+    ],
+    [
+        {
+            description: 'price 10**13 - 1, amount -2**81 + 1, feeBps 10_000',
+            price: BigInt(10 ** 13) - BigInt(1),
+            amount: -BigInt(2 ** 81) + BigInt(1),
+            feeBps: BigInt(10_000),
+        },
+        {
+            description: 'price 10**13 - 1, amount -2**81 + 1, feeBps 10_000',
+            price: BigInt(10 ** 13) - BigInt(1),
+            amount: -BigInt(2 ** 81) + BigInt(1),
+            feeBps: BigInt(10_000),
+        },
+    ],
+    [
+        {
+            description: 'price 10**13 - 1, amount 2**82 + 1, feeBps 10_000',
+            price: BigInt(10 ** 13) - BigInt(1),
+            amount: BigInt(2 ** 82) - BigInt(1),
+            feeBps: BigInt(10_000),
+        },
+    ],
+    [
+        {
+            description: 'price 10**13 - 1, amount -2**82 + 1, feeBps 10_000',
+            price: BigInt(10 ** 13) - BigInt(1),
+            amount: -BigInt(2 ** 82) + BigInt(1),
+            feeBps: BigInt(10_000),
         },
     ],
 ]
 
 export {
-    TestCasePosition,
-    POSITION_BASE_TEST_CASE,
-    POSITION_REVERT_TEST_CASE,
-    POSITION_LIMIT_TEST_CASE,
+    PositionUpdateTestCase,
+    POSITION_UPDATE_BASE_TEST_CASES,
+    POSITION_UPDATE_REVERT_TEST_CASES,
+    POSITION_UPDATE_LIMIT_TEST_CASES,
 }
