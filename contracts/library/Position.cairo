@@ -19,6 +19,7 @@ func positions(address : felt) -> (position : Info):
 end
 
 # @notice Get position
+# @param address The address of the position's owner
 # @return position The position
 func get_position{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
     address : felt
@@ -33,15 +34,18 @@ func settle{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
     address : felt, price : felt
 ) -> (delta : felt):
     let (info) = positions.read(address)
-    # TODO check size < max(felt)/max(price) = max(size) during trade
-    tempvar delta = price * info.size - info.cost - info.fees  # use tempvar to bypass <compound-expr> created if using let
+    # use tempvar to bypass <compound-expr> created if using let
+    tempvar delta = price * info.size - info.cost - info.fees
 
     positions.write(address, Info(0, 0, 0))
     return (delta)
 end
 
-# TODO perform range bound checks
 # @notice Update position size
+# @param address The address of the position's owner
+# @param price The price of the instrument
+# @param amount The amount of the position update
+# @param feeBps The fee in basic points
 func update{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
     address : felt, price : felt, amount : felt, feeBps : felt
 ) -> ():
@@ -56,7 +60,7 @@ func update{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
     let (abs_val) = abs_value(cost_inc)
     let fees_inc = abs_val * feeBps
     let (fee_inc, _) = unsigned_div_rem(fees_inc, 10000)
-    tempvar fees = fee_inc + info.fees
+    local fees = fee_inc + info.fees
 
     # check ranges for position state
     range_checks(amount, price, size, cost, fees)
@@ -77,8 +81,10 @@ func liquidate{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr
     tempvar cost_inc = (-info.size) * price
     let cost = info.cost + cost_inc
 
-    # TODO divide by 10_000
-    tempvar fees = cost_inc * feeBps + info.fees
+    let (abs_val) = abs_value(cost_inc)
+    let fees_inc = abs_val * feeBps
+    let (fee_inc, _) = unsigned_div_rem(fees_inc, 10000)
+    tempvar fees = fee_inc + info.fees
 
     positions.write(address, Info(fees, cost, 0))
     let (delta) = settle(address, price)

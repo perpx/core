@@ -11,7 +11,9 @@ from starkware.cairo.common.uint256 import Uint256
 
 @contract_interface
 namespace IPerpxV1Instrument:
+    #
     # PERMISSIONLESS
+    #
 
     # @notice Trade an amount of the index
     # @param amount The amount to trade of
@@ -21,9 +23,10 @@ namespace IPerpxV1Instrument:
     # @param owner The owner of the position
     func liquidate(owner : felt) -> ():
     end
-    ################################################################################
 
+    #
     # IMMUTABLE
+    #
 
     # @notice The exchange contract
     # @return address The exchange contract address
@@ -33,9 +36,10 @@ namespace IPerpxV1Instrument:
     # @return address The collateral token address
     func collateral_token() -> (address : felt):
     end
-    ################################################################################
 
+    #
     # MUTABLE
+    #
 
     # @notice Returns the information about a position by the position's owner
     # @param owner The position's key is the owner
@@ -60,9 +64,10 @@ namespace IPerpxV1Instrument:
     # @return fee The fee of the instrument
     func fee() -> (fee : felt):
     end
-    ################################################################################
 
+    #
     # OWNER
+    #
 
     # @notice Set the value of the instrument
     # @param value The value of the instrument
@@ -73,5 +78,4 @@ namespace IPerpxV1Instrument:
     # @return delta The change in the user collateral
     func settle_position(address : felt) -> (delta : felt):
     end
-    ################################################################################
 end
