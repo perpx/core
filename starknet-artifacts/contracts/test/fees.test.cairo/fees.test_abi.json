@@ -1,0 +1,41 @@
+[
+    {
+        "inputs": [],
+        "name": "get_fee_bps",
+        "outputs": [
+            {
+                "name": "res",
+                "type": "felt"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "name": "price",
+                "type": "felt"
+            },
+            {
+                "name": "amount",
+                "type": "felt"
+            },
+            {
+                "name": "long",
+                "type": "felt"
+            },
+            {
+                "name": "short",
+                "type": "felt"
+            },
+            {
+                "name": "liquidity",
+                "type": "felt"
+            }
+        ],
+        "name": "compute_fee_bps_test",
+        "outputs": [],
+        "type": "function"
+    }
+]

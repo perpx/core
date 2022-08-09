@@ -1,0 +1,109 @@
+[
+    {
+        "members": [
+            {
+                "name": "fees",
+                "offset": 0,
+                "type": "felt"
+            },
+            {
+                "name": "cost",
+                "offset": 1,
+                "type": "felt"
+            },
+            {
+                "name": "size",
+                "offset": 2,
+                "type": "felt"
+            }
+        ],
+        "name": "Info",
+        "size": 3,
+        "type": "struct"
+    },
+    {
+        "inputs": [],
+        "name": "view_delta",
+        "outputs": [
+            {
+                "name": "delt",
+                "type": "felt"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "name": "address",
+                "type": "felt"
+            }
+        ],
+        "name": "get_position_test",
+        "outputs": [
+            {
+                "name": "position",
+                "type": "Info"
+            }
+        ],
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "name": "address",
+                "type": "felt"
+            },
+            {
+                "name": "price",
+                "type": "felt"
+            }
+        ],
+        "name": "settle_test",
+        "outputs": [],
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "name": "address",
+                "type": "felt"
+            },
+            {
+                "name": "price",
+                "type": "felt"
+            },
+            {
+                "name": "amount",
+                "type": "felt"
+            },
+            {
+                "name": "feeBps",
+                "type": "felt"
+            }
+        ],
+        "name": "update_test",
+        "outputs": [],
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "name": "address",
+                "type": "felt"
+            },
+            {
+                "name": "price",
+                "type": "felt"
+            },
+            {
+                "name": "feeBps",
+                "type": "felt"
+            }
+        ],
+        "name": "liquidate_test",
+        "outputs": [],
+        "type": "function"
+    }
+]
