@@ -18,10 +18,10 @@ end
 func positions(address : felt) -> (position : Info):
 end
 
-# @notice Get position
+# @notice View position
 # @param address The address of the position's owner
 # @return position The position
-func get_position{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+func view_position{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
     address : felt
 ) -> (position : Info):
     let (position) = positions.read(address)
