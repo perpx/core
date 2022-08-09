@@ -14,16 +14,10 @@ import {
     POSITION_LIQUIDATE_BASE_TEST_CASES,
     POSITION_LIQUIDATE_LIMIT_TEST_CASES,
 } from './test-cases/PositionLiquidateTestCases'
-import { InvokeResponse } from '@shardlabs/starknet-hardhat-plugin/dist/src/types'
 
 let contract: StarknetContract
 let address: bigint
 let prime: bigint
-
-let maxPrice: bigint = BigInt(10 ** 13)
-let rangeCheckBound: bigint = BigInt(2 ** 128)
-let maxAmount: bigint = BigInt(2 ** 82)
-let maxBound: bigint = BigInt(2 ** 127)
 
 function abs(num: bigint): bigint {
     return num < 0n ? -num : num
@@ -55,7 +49,6 @@ describe('#update', () => {
 
     it('should pass with for each base case', async () => {
         for (const baseCase of POSITION_UPDATE_BASE_TEST_CASES) {
-            console.log(baseCase.description)
             const args: StringMap = {
                 address: address,
                 price: baseCase.price,
@@ -197,14 +190,13 @@ describe('#liquidate #settle', () => {
             cost += costInc
             fees += (abs(costInc) * baseCase.feeBps) / 10_000n
             const delta = -cost - fees
-            const resp = await contract.call('view_delta')
+            const resp = await contract.call('get_delta_test')
             expect(resp.delt).to.equal(delta)
         }
     })
 
     it('should pass for all limit cases', async () => {
         for (const limitCase of POSITION_LIQUIDATE_LIMIT_TEST_CASES) {
-            console.log(limitCase.description)
             let size: bigint = BigInt(0)
             let cost: bigint = BigInt(0)
             let fees: bigint = BigInt(0)
@@ -231,7 +223,7 @@ describe('#liquidate #settle', () => {
             cost += costInc
             fees += (abs(costInc) * limitCase.feeBps) / 10_000n
             const delta = -cost - fees
-            const resp = await contract.call('view_delta')
+            const resp = await contract.call('get_delta_test')
             if (resp.delt > prime / BigInt(2)) {
                 resp.delt = resp.delt - prime
             }

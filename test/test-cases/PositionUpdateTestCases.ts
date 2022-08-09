@@ -116,9 +116,9 @@ const POSITION_UPDATE_REVERT_TEST_CASES: PositionUpdateTestCase[][] = [
     [
         {
             description:
-                'price 1, -amount 2**82 - 1, feeBps 0, fails on negative amount',
+                'price 1, -amount 2**82, feeBps 0, fails on negative amount',
             price: BigInt(1),
-            amount: -BigInt(2 ** 82) - BigInt(1),
+            amount: -BigInt(2 ** 82),
             feeBps: BigInt(0),
             error: 'Value 3618502788666131213697322783095070105623107215331596699973092056135872020480',
         },
@@ -161,9 +161,9 @@ const POSITION_UPDATE_REVERT_TEST_CASES: PositionUpdateTestCase[][] = [
         },
         {
             description:
-                'price 1, amount -2**81-1, feeBps 1, runs twice and fails on negative size',
+                'price 1, amount -2**81, feeBps 1, runs twice and fails on negative size',
             price: BigInt(1),
-            amount: -BigInt(2 ** 81) - BigInt(1),
+            amount: -BigInt(2 ** 81),
             feeBps: BigInt(1),
             error: 'Value 3618502788666131213697322783095070105623107215331596699973092056135872020480',
         },
@@ -217,9 +217,9 @@ const POSITION_UPDATE_LIMIT_TEST_CASES: PositionUpdateTestCase[][] = [
             feeBps: BigInt(10_000),
         },
         {
-            description: 'price 1, amount -2**81, feeBps 10_000',
+            description: 'price 1, amount -2**81 + 1, feeBps 10_000',
             price: BigInt(1),
-            amount: -BigInt(2 ** 81),
+            amount: -BigInt(2 ** 81) + BigInt(1),
             feeBps: BigInt(10_000),
         },
     ],
