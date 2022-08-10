@@ -1,7 +1,7 @@
 %lang starknet
 
 from starkware.cairo.common.cairo_builtins import HashBuiltin
-from starkware.cairo.common.math import unsigned_div_rem, abs_value
+from starkware.cairo.common.math import signed_div_rem, abs_value
 
 from contracts.constants.perpx_constants import MAX_PRICE, MAX_AMOUNT, MAX_BOUND
 
@@ -71,11 +71,11 @@ func update_position{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_che
 
     let (abs_val) = abs_value(cost_inc)
     let fees_inc = abs_val * fee_bps
-    let (fee_inc, _) = unsigned_div_rem(fees_inc, 10000)
+    let (fee_inc, _) = signed_div_rem(fees_inc, 1000000, MAX_BOUND)
     local fees = fee_inc + info.fees
 
     # check ranges for position state
-    range_checks(amount, price, size, cost, fees)
+    range_checks(amount, price, size)
 
     storage_positions.write(address, Info(fees, cost, size))
     return ()
@@ -95,7 +95,7 @@ func liquidate_position{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_
 
     let (abs_val) = abs_value(cost_inc)
     let fees_inc = abs_val * fee_bps
-    let (fee_inc, _) = unsigned_div_rem(fees_inc, 10000)
+    let (fee_inc, _) = signed_div_rem(fees_inc, 1000000, MAX_BOUND)
     tempvar fees = fee_inc + info.fees
 
     storage_positions.write(address, Info(fees, cost, 0))
@@ -110,7 +110,7 @@ end
 # @param cost The cost of the position after trade
 # @param fees The fees of the position after trade
 func range_checks{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
-    amount : felt, price : felt, size : felt, cost : felt, fees : felt
+    amount : felt, price : felt, size : felt
 ) -> ():
     # check amount is within bounds
     assert [range_check_ptr] = amount + MAX_AMOUNT - 1
