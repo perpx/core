@@ -33,7 +33,7 @@ end
 # @notice Get position
 # @param address The address of the position's owner
 # @return position The position
-func get_position{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+func position{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
     address : felt
 ) -> (position : Info):
     let (_position) = storage_positions.read(address)
@@ -42,7 +42,7 @@ end
 
 # @notice Settle accumulated pnl and fees
 # @return delta The collateral change
-func settle{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+func settle_position{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
     address : felt, price : felt
 ) -> (delta : felt):
     let (info) = storage_positions.read(address)
@@ -58,7 +58,7 @@ end
 # @param price The price of the instrument
 # @param amount The amount of the position update
 # @param fee_bps The fee in basic points
-func update{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+func update_position{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
     address : felt, price : felt, amount : felt, fee_bps : felt
 ) -> ():
     alloc_locals
@@ -85,7 +85,7 @@ end
 # @param price The liquidation price of position
 # @param fee_bps The fee bips to apply for liquidation
 # @return delta The owner's collateral change
-func liquidate{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+func liquidate_position{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
     address : felt, price : felt, fee_bps : felt
 ) -> (delta : felt):
     let (info) = storage_positions.read(address)
@@ -99,7 +99,7 @@ func liquidate{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr
     tempvar fees = fee_inc + info.fees
 
     storage_positions.write(address, Info(fees, cost, 0))
-    let (delta) = settle(address, price)
+    let (delta) = settle_position(address, price)
 
     return (delta)
 end
