@@ -11,13 +11,18 @@ import {
     POSITION_UPDATE_LIMIT_TEST_CASES,
 } from './test-cases/PositionUpdateTestCases'
 import {
-    POSITION_LIQUIDATE_BASE_TEST_CASES,
+    POSITION_LIQUIDATE_BASE_TEST_CASES_GENERAL,
+    POSITION_LIQUIDATE_BASE_TEST_CASES_SHORT,
     POSITION_LIQUIDATE_LIMIT_TEST_CASES,
+    PositionLiquidateTestCase,
 } from './test-cases/PositionLiquidateTestCases'
 
 let contract: StarknetContract
 let address: bigint
 let prime: bigint
+let POSITION_LIQUIDATE_BASE_TEST_CASES: PositionLiquidateTestCase[]
+// Use short in order to test 8 of the 108 liquidation cases (only cases where price, amount fee_bsp != 0)
+const short: boolean = true
 
 function abs(num: bigint): bigint {
     return num < 0n ? -num : num
@@ -31,12 +36,18 @@ async function getPosition(address: BigInt) {
 
 before(async () => {
     const contractFactory: StarknetContractFactory =
-        await starknet.getContractFactory('test/positions_test.cairo')
+        await starknet.getContractFactory('test/position_test.cairo')
     contract = await contractFactory.deploy()
     address = BigInt(
         '0x7cde936f47a2240ab1f8764f4dcce14b53af1a5751c33eb4ecbfd643239da5d'
     )
     prime = BigInt(2 ** 251) + BigInt(17) * BigInt(2 ** 192) + BigInt(1)
+    POSITION_LIQUIDATE_BASE_TEST_CASES =
+        POSITION_LIQUIDATE_BASE_TEST_CASES_GENERAL
+    if (short) {
+        POSITION_LIQUIDATE_BASE_TEST_CASES =
+            POSITION_LIQUIDATE_BASE_TEST_CASES_SHORT
+    }
 })
 
 describe('#update', () => {
@@ -58,7 +69,7 @@ describe('#update', () => {
             await contract.invoke('update_test', args)
             const pos = await getPosition(address)
             const cost = baseCase.amount * baseCase.price
-            const fees = (abs(cost) * baseCase.feeBps) / 10_000n
+            const fees = (abs(cost) * baseCase.feeBps) / 1_000_000n
             expect(pos.position.fees).to.equal(fees, 'failed on fees')
             expect(pos.position.cost).to.equal(cost, 'failed on cost')
             expect(pos.position.size).to.equal(
@@ -90,11 +101,17 @@ describe('#update', () => {
                 size += BigInt(cas.amount)
                 const costInc = cas.amount * cas.price
                 cost += costInc
-                fees += (abs(costInc) * cas.feeBps) / 10_000n
+                fees += (abs(costInc) * cas.feeBps) / 1_000_000n
                 if (pos.position.cost > prime / BigInt(2)) {
                     pos.position.cost = pos.position.cost - prime
                 }
-                expect(pos.position.fees).to.equal(
+                if (pos.position.fees > prime / BigInt(2)) {
+                    pos.position.fees = pos.position.fees - prime
+                }
+                if (pos.position.size > prime / BigInt(2)) {
+                    pos.position.size = pos.position.size - prime
+                }
+                expect(pos.position.fees).to.deep.equal(
                     fees,
                     `failed on fees ${cas.description}`
                 )
@@ -178,7 +195,7 @@ describe('#liquidate #settle', () => {
                 size += update.amount
                 const costInc: bigint = update.price * update.amount
                 cost += costInc
-                fees += (abs(costInc) * update.feeBps) / 10_000n
+                fees += (abs(costInc) * update.feeBps) / 1_000_000n
             }
             const args: StringMap = {
                 address: address,
@@ -188,7 +205,7 @@ describe('#liquidate #settle', () => {
             await contract.invoke('liquidate_test', args)
             const costInc: bigint = -size * baseCase.price
             cost += costInc
-            fees += (abs(costInc) * baseCase.feeBps) / 10_000n
+            fees += (abs(costInc) * baseCase.feeBps) / 1_000_000n
             const delta = -cost - fees
             const resp = await contract.call('get_delta_test')
             expect(resp.delt).to.equal(delta)
@@ -211,7 +228,7 @@ describe('#liquidate #settle', () => {
                 size += update.amount
                 const costInc: bigint = update.price * update.amount
                 cost += costInc
-                fees += (abs(costInc) * update.feeBps) / 10_000n
+                fees += (abs(costInc) * update.feeBps) / 1_000_000n
             }
             const args: StringMap = {
                 address: address,
@@ -221,7 +238,7 @@ describe('#liquidate #settle', () => {
             await contract.invoke('liquidate_test', args)
             const costInc: bigint = -size * limitCase.price
             cost += costInc
-            fees += (abs(costInc) * limitCase.feeBps) / 10_000n
+            fees += (abs(costInc) * limitCase.feeBps) / 1_000_000n
             const delta = -cost - fees
             const resp = await contract.call('get_delta_test')
             if (resp.delt > prime / BigInt(2)) {
