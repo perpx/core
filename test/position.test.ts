@@ -57,14 +57,13 @@ describe('#update', () => {
         expect(pos.position.cost).to.equal(0n)
         expect(pos.position.size).to.equal(0n)
     })
-
     it('should pass with for each base case', async () => {
         for (const baseCase of POSITION_UPDATE_BASE_TEST_CASES) {
             const args: StringMap = {
                 address: address,
                 price: baseCase.price,
                 amount: baseCase.amount,
-                feeBps: baseCase.feeBps,
+                fee_bps: baseCase.feeBps,
             }
             await contract.invoke('update_test', args)
             const pos = await getPosition(address)
@@ -78,12 +77,12 @@ describe('#update', () => {
             )
             const arg: StringMap = {
                 address: address,
-                price: 0,
+                price: 0n,
+                fee_bps: 0n,
             }
-            await contract.invoke('settle_test', arg)
+            await contract.invoke('close_test', arg)
         }
     })
-
     it('should pass with for each limit case', async () => {
         for (const limitCase of POSITION_UPDATE_LIMIT_TEST_CASES) {
             let size: bigint = 0n
@@ -94,7 +93,7 @@ describe('#update', () => {
                     address: address,
                     price: cas.price,
                     amount: cas.amount,
-                    feeBps: cas.feeBps,
+                    fee_bps: cas.feeBps,
                 }
                 await contract.invoke('update_test', args)
                 const pos = await getPosition(address)
@@ -127,8 +126,9 @@ describe('#update', () => {
             const arg: StringMap = {
                 address: address,
                 price: 0,
+                fee_bps: 0,
             }
-            await contract.invoke('settle_test', arg)
+            await contract.invoke('close_test', arg)
         }
     })
 
@@ -142,7 +142,7 @@ describe('#update', () => {
                     address: address,
                     price: failScenario[i].price,
                     amount: failScenario[i].amount,
-                    feeBps: failScenario[i].feeBps,
+                    fee_bps: failScenario[i].feeBps,
                 }
                 await contract.invoke('update_test', args)
                 index = i + 1
@@ -153,7 +153,7 @@ describe('#update', () => {
                     address: address,
                     price: failScenario[index].price,
                     amount: failScenario[index].amount,
-                    feeBps: failScenario[index].feeBps,
+                    fee_bps: failScenario[index].feeBps,
                 }
                 await contract.invoke('update_test', args)
                 expect.fail(
@@ -169,8 +169,9 @@ describe('#update', () => {
                 args = {
                     address: address,
                     price: 0,
+                    fee_bps: 0,
                 }
-                await contract.invoke('settle_test', args)
+                await contract.invoke('close_test', args)
                 passed = false
             }
         }
@@ -189,7 +190,7 @@ describe('#liquidate #settle', () => {
                     address: address,
                     price: update.price,
                     amount: update.amount,
-                    feeBps: update.feeBps,
+                    fee_bps: update.feeBps,
                 }
                 await contract.invoke('update_test', args)
                 size += update.amount
@@ -200,9 +201,9 @@ describe('#liquidate #settle', () => {
             const args: StringMap = {
                 address: address,
                 price: baseCase.price,
-                feeBps: baseCase.feeBps,
+                fee_bps: baseCase.feeBps,
             }
-            await contract.invoke('liquidate_test', args)
+            await contract.invoke('close_test', args)
             const costInc: bigint = -size * baseCase.price
             cost += costInc
             fees += (abs(costInc) * baseCase.feeBps) / 1_000_000n
@@ -222,7 +223,7 @@ describe('#liquidate #settle', () => {
                     address: address,
                     price: update.price,
                     amount: update.amount,
-                    feeBps: update.feeBps,
+                    fee_bps: update.feeBps,
                 }
                 await contract.invoke('update_test', args)
                 size += update.amount
@@ -233,9 +234,9 @@ describe('#liquidate #settle', () => {
             const args: StringMap = {
                 address: address,
                 price: limitCase.price,
-                feeBps: limitCase.feeBps,
+                fee_bps: limitCase.feeBps,
             }
-            await contract.invoke('liquidate_test', args)
+            await contract.invoke('close_test', args)
             const costInc: bigint = -size * limitCase.price
             cost += costInc
             fees += (abs(costInc) * limitCase.feeBps) / 1_000_000n
