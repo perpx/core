@@ -40,19 +40,6 @@ func position{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}
     return (position=_position)
 end
 
-# @notice Settle accumulated pnl and fees
-# @return delta The collateral change
-func settle_position{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
-    address : felt, price : felt
-) -> (delta : felt):
-    let (info) = storage_positions.read(address)
-    # use tempvar to bypass <compound-expr> created if using let
-    tempvar delta = price * info.size - info.cost - info.fees
-
-    storage_positions.write(address, Info(0, 0, 0))
-    return (delta)
-end
-
 # @notice Update position size
 # @param address The address of the position's owner
 # @param price The price of the instrument
@@ -81,25 +68,25 @@ func update_position{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_che
     return ()
 end
 
-# @notice Liquidate a position
-# @param price The liquidation price of position
-# @param fee_bps The fee bips to apply for liquidation
+# @notice Close a position
+# @param price The closing price of the position
+# @param fee_bps The fee bips to apply for closing
 # @return delta The owner's collateral change
-func liquidate_position{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+func close_position{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
     address : felt, price : felt, fee_bps : felt
 ) -> (delta : felt):
     let (info) = storage_positions.read(address)
 
-    tempvar cost_inc = (-info.size) * price
+    tempvar cost_inc = price * (-info.size)
     let cost = info.cost + cost_inc
 
     let (abs_val) = abs_value(cost_inc)
     let fees_inc = abs_val * fee_bps
     let (fee_inc, _) = signed_div_rem(fees_inc, 1000000, MAX_BOUND)
-    tempvar fees = fee_inc + info.fees
+    let fees = fee_inc + info.fees
 
-    storage_positions.write(address, Info(fees, cost, 0))
-    let (delta) = settle_position(address, price)
+    tempvar delta = (-cost) - fees
+    storage_positions.write(address, Info(0, 0, 0))
 
     return (delta)
 end
