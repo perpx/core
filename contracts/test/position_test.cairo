@@ -2,12 +2,7 @@
 
 from starkware.cairo.common.cairo_builtins import HashBuiltin
 
-from contracts.library.Position import (
-    settle_position,
-    update_position,
-    liquidate_position,
-    position,
-)
+from contracts.library.Position import update_position, close_position, position
 from contracts.library.Position import Info
 
 @storage_var
@@ -31,27 +26,18 @@ func get_position_test{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_c
 end
 
 @external
-func settle_test{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
-    address : felt, price : felt
-) -> ():
-    let (delt) = settle_position(address, price)
-    delta.write(delt)
-    return ()
-end
-
-@external
 func update_test{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
-    address : felt, price : felt, amount : felt, feeBps : felt
+    address : felt, price : felt, amount : felt, fee_bps : felt
 ) -> ():
-    update_position(address, price, amount, feeBps)
+    update_position(address, price, amount, fee_bps)
     return ()
 end
 
 @external
-func liquidate_test{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
-    address : felt, price : felt, feeBps : felt
+func close_test{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+    address : felt, price : felt, fee_bps : felt
 ) -> ():
-    let (delt) = liquidate_position(address, price, feeBps)
+    let (delt) = close_position(address, price, fee_bps)
     delta.write(delt)
     return ()
 end
