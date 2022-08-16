@@ -14481,6 +14481,10 @@
                 "type": "const",
                 "value": 170141183460469231731687303715884105728
             },
+            "contracts.constants.perpx_constants.MAX_DIV": {
+                "type": "const",
+                "value": 10633823966279326983230456482242756608
+            },
             "contracts.constants.perpx_constants.MAX_PRICE": {
                 "type": "const",
                 "value": 10000000000000

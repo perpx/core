@@ -1,6 +1,18 @@
 [
     {
         "inputs": [],
+        "name": "get_rest",
+        "outputs": [
+            {
+                "name": "res",
+                "type": "felt"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
         "name": "get_fee_bps",
         "outputs": [
             {

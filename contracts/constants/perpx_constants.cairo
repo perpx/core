@@ -12,3 +12,6 @@ const MAX_AMOUNT = 2 ** 82
 
 # The max value used for range checks
 const MAX_BOUND = 2 ** 127
+
+# the max value used for a div of unsigned_div_rem(value, div)
+const MAX_DIV = 2 ** 123
