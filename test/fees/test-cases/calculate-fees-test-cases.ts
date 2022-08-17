@@ -5,6 +5,7 @@ const MIN_LIQUIDITY = 1
 const MAX_LIQUIDITY = 2**122
 
 //scenarios:
+// 0. volatility_fee: 
 // 1. price: max price or 1
 // 2. amount: max_amount or 0
 // 3. long: max_amount * max_price or 0
@@ -13,6 +14,7 @@ const MAX_LIQUIDITY = 2**122
 
 interface CalculateFeesInterface {
     description: string,
+    volatility_fee: bigint,
     price: bigint,
     amount: bigint,
     long: bigint,
@@ -33,7 +35,7 @@ function non_random_outside_limit(array: Array<bigint>): Array<bigint> {
     return [a,b]
 }
 
-// LIMIT SCENARIOS
+const limit_volatility_fees = [BigInt(100_000)]
 const limit_prices = [BigInt(1), (BigInt(MAX_PRICE) - BigInt(1))]
 const limit_amounts = [-BigInt(MAX_AMOUNT), BigInt(MAX_AMOUNT)]
 const limit_liquidities = [BigInt(MIN_LIQUIDITY), (BigInt(MAX_LIQUIDITY) - BigInt(1))]
@@ -47,9 +49,11 @@ for (const price of limit_prices) {
         for (const liquidity of limit_liquidities) { 
             for (const long of limit_longs) { 
                 for (const short of limit_shorts) { 
+                    for(const volatility_fee of limit_volatility_fees)
                     CALCULATE_FEES_TEST_CASES_LIMIT_AUTOMATED.push(
                     {
                         description: `price ${price}, amount ${amount}, long ${long}, short ${short}, liquidity ${liquidity}`,
+                        volatility_fee: volatility_fee,
                         price: price,
                         amount: amount,
                         long: long,
@@ -62,7 +66,7 @@ for (const price of limit_prices) {
     }
 }
 
-// BASE SCENARIOS
+const base_volatility_fees = [BigInt(100_000)]
 const base_prices = random_inside_limit(limit_prices)
 const base_amounts = random_inside_limit(limit_amounts)
 const base_liquidities =random_inside_limit(limit_liquidities)
@@ -76,9 +80,11 @@ for (const price of base_prices) {
         for (const liquidity of base_liquidities) { 
             for (const long of base_longs) { 
                 for (const short of base_shorts) { 
+                    for (const volatility_fee of base_volatility_fees) {
                     CALCULATE_FEES_TEST_CASES_BASE_AUTOMATED.push(
                     {
                         description: `price ${price}, amount ${amount}, long ${long}, short ${short}, liquidity ${liquidity}`,
+                        volatility_fee: volatility_fee,
                         price: price,
                         amount: amount,
                         long: long,
@@ -86,12 +92,14 @@ for (const price of base_prices) {
                         liquidity: liquidity,
                     }
                 )}
+                }
             }
         }
     }
 }
 
 // FAIL SCENARIOS
+const fail_volatility_fees = [BigInt(100_000)]
 const fail_prices = non_random_outside_limit(limit_prices)
 const fail_amounts = non_random_outside_limit(limit_amounts)
 const fail_liquidities =non_random_outside_limit(limit_liquidities)
@@ -105,9 +113,11 @@ for (const price of fail_prices) {
         for (const liquidity of fail_liquidities) { 
             for (const long of fail_longs) { 
                 for (const short of fail_shorts) { 
+                    for (const volatility_fee of fail_volatility_fees) {
                     CALCULATE_FEES_TEST_CASES_FAIL_AUTOMATED.push(
                     {
                         description: `price ${price}, amount ${amount}, long ${long}, short ${short}, liquidity ${liquidity}`,
+                        volatility_fee: volatility_fee,
                         price: price,
                         amount: amount,
                         long: long,
@@ -120,108 +130,4 @@ for (const price of fail_prices) {
         }
     }
 }
-
-
-export const CALCULATE_FEES_TEST_CASES_BASE: CalculateFeesInterface[] = [
-    {
-        description: "price 100000, amount 2, long 40 000, short 30 000, liquidity 100000",
-        price: BigInt(100000),
-        amount: BigInt(2),
-        long: BigInt(40000),
-        short: BigInt(30000),
-        liquidity: BigInt(100000),
-    },
-    {
-        description: "price 100000, amount -2, long 40000, short 30000, liquidity 100000",
-        price: BigInt(100000),
-        amount: BigInt(2),
-        long: BigInt(40000),
-        short: BigInt(30000),
-        liquidity: BigInt(100000),
-    },
-    {
-        description: "price 1000, amount 0, long 0, short 0, liquidity 10000000",
-        price: BigInt(1000),
-        amount: BigInt(0),
-        long: BigInt(0),
-        short: BigInt(0),
-        liquidity: BigInt(10000000),
-    },
-    {
-        description: "price 1000, amount 100000, long 0, short 0, liquidity 10000000",
-        price: BigInt(1000),
-        amount: BigInt(100000),
-        long: BigInt(0),
-        short: BigInt(0),
-        liquidity: BigInt(10000000),
-    },
-    {
-        description: "price 1000, amount -100000, long 0, short 0, liquidity 10000000",
-        price: BigInt(1000),
-        amount: BigInt(100000),
-        long: BigInt(0),
-        short: BigInt(0),
-        liquidity: BigInt(10000000),
-    },
-]
-
-export const CALCULATE_FEES_TEST_CASES_LIMIT: CalculateFeesInterface[] = [
-
-
-    // limit price
-    {
-        description: "price LIMIT_PRICE, amount 0, long 0, short 0, liquidity 10000000",
-        price: BigInt(MAX_PRICE),
-        amount: BigInt(0),
-        long: BigInt(0),
-        short: BigInt(0),
-        liquidity: BigInt(10000000),
-    },
-    {
-        description: "price MAX_PRICE, amount 0, long 0, short 0, liquidity 10000000",
-        price: BigInt(MAX_PRICE),
-        amount: BigInt(0),
-        long: BigInt(0),
-        short: BigInt(0),
-        liquidity: BigInt(MAX_LIQUIDITY) - BigInt(1),
-    },
-    // take some longs
-    {
-        description: "price MAX_PRICE, amount 0, long 0, short 0, liquidity 10000000",
-        price: BigInt(MAX_PRICE),
-        amount: BigInt(0),
-        long: BigInt(0),
-        short: BigInt(0),
-        liquidity: BigInt(MAX_LIQUIDITY) - BigInt(1),
-    },
-    // check if we should let people have bigger position than the liquidity, here fee becomes 200% 
-    {
-        description: "price MAX_PRICE, amount MAX_AMOUNT, long 0, short 0, liquidity MIN_LIQUIDITY",
-        price: BigInt(MAX_PRICE),
-        amount: BigInt(MAX_AMOUNT),
-        long: BigInt(0),
-        short: BigInt(0),
-        liquidity: BigInt(MIN_LIQUIDITY),
-    },
-    // check if we should let people have bigger position than the liquidity, here fee becomes 200% 
-    {
-        description: "price MAX_PRICE, amount MAX_AMOUNT, long 0, short 0, liquidity MAX_LIQUIDITY",
-        price: BigInt(MAX_PRICE),
-        amount: BigInt(MAX_AMOUNT),
-        long: BigInt(0),
-        short: BigInt(0),
-        liquidity: BigInt(MAX_LIQUIDITY)-BigInt(1),
-    },
-]
-
-export const CALCULATE_FEES_TEST_CASES_FAIL: CalculateFeesInterface[] = [
-    {
-        description: "price 0, amount 0, long 0, short 0, liquidity 0",
-        price: BigInt(0),
-        amount: BigInt(0),
-        long: BigInt(0),
-        short: BigInt(0),
-        liquidity: BigInt(0),
-        error: "AssertionError: div=0x0 is out of the valid range.",
-    },
-]
+}
