@@ -87,6 +87,7 @@ end
 #
 # Constructor
 #
+
 @constructor
 func constructor{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
     instrument_count : felt
@@ -213,15 +214,15 @@ end
 # @param prices_len The number of instruments to update
 # @param prices The prices of the instruments to update
 # @param instruments The instruments to update
-func update_price{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+func update_prices{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
     prices_len : felt, prices : felt*, instruments : felt
 ) -> ():
     only_owner()
-    _update_price(prices_len=prices_len, prices=prices, mult=1, instruments=instruments)
+    _update_prices(prices_len=prices_len, prices=prices, mult=1, instruments=instruments)
     return ()
 end
 
-func _update_price{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+func _update_prices{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
     prices_len : felt, prices : felt*, mult : felt, instruments : felt
 ) -> ():
     alloc_locals
@@ -232,9 +233,9 @@ func _update_price{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check
     let (q, r) = unsigned_div_rem(instruments, 2)
     if r == 1:
         storage_oracles.write(mult, [prices])
-        _update_price(prices_len=prices_len - 1, prices=prices + 1, mult=mult * 2, instruments=q)
+        _update_prices(prices_len=prices_len - 1, prices=prices + 1, mult=mult * 2, instruments=q)
     else:
-        _update_price(prices_len=prices_len, prices=prices, mult=mult * 2, instruments=q)
+        _update_prices(prices_len=prices_len, prices=prices, mult=mult * 2, instruments=q)
     end
     return ()
 end
