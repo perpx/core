@@ -58,13 +58,14 @@ namespace IPerpxV1Exchange:
     func get_price(instrument : felt) -> (price : felt):
     end
     # @notice Returns the amount of collateral for the instrument
+    # @param owner The owner of the collateral
     # @param instrument The collateral's instrument
     # @return collateral The amount of collateral for the instrument
-    func get_collateral(instrument : felt) -> (collateral : felt):
+    func get_collateral(owner : felt, instrument : felt) -> (collateral : felt):
     end
-    # @notice Returns the number of the instruments
-    # @return num The number of instruments on the exchange
-    func get_num_instruments() -> (num : felt):
+    # @notice Returns the number of instruments
+    # @return count The number of instruments on the exchange
+    func get_instrument_count() -> (count : felt):
     end
 
     #
