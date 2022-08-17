@@ -29,7 +29,10 @@ function abs(num: bigint): bigint {
 }
 
 async function getPosition(address: BigInt) {
-    const args: StringMap = { address: address }
+    const args: StringMap = {
+        address: address,
+        instrument: 0,
+    }
     const pos = await contract.call('get_position_test', args)
     return pos
 }
@@ -61,6 +64,7 @@ describe('#update', () => {
         for (const baseCase of POSITION_UPDATE_BASE_TEST_CASES) {
             const args: StringMap = {
                 address: address,
+                instrument: 0,
                 price: baseCase.price,
                 amount: baseCase.amount,
                 fee_bps: baseCase.feeBps,
@@ -77,6 +81,7 @@ describe('#update', () => {
             )
             const arg: StringMap = {
                 address: address,
+                instrument: 0,
                 price: 0n,
                 fee_bps: 0n,
             }
@@ -91,6 +96,7 @@ describe('#update', () => {
             for (const cas of limitCase) {
                 const args: StringMap = {
                     address: address,
+                    instrument: 0,
                     price: cas.price,
                     amount: cas.amount,
                     fee_bps: cas.feeBps,
@@ -125,6 +131,7 @@ describe('#update', () => {
             }
             const arg: StringMap = {
                 address: address,
+                instrument: 0,
                 price: 0,
                 fee_bps: 0,
             }
@@ -140,6 +147,7 @@ describe('#update', () => {
             for (let i = 0; failScenario[i].error === ''; i++) {
                 args = {
                     address: address,
+                    instrument: 0,
                     price: failScenario[i].price,
                     amount: failScenario[i].amount,
                     fee_bps: failScenario[i].feeBps,
@@ -151,6 +159,7 @@ describe('#update', () => {
             try {
                 args = {
                     address: address,
+                    instrument: 0,
                     price: failScenario[index].price,
                     amount: failScenario[index].amount,
                     fee_bps: failScenario[index].feeBps,
@@ -168,6 +177,7 @@ describe('#update', () => {
             if (passed) {
                 args = {
                     address: address,
+                    instrument: 0,
                     price: 0,
                     fee_bps: 0,
                 }
@@ -188,6 +198,7 @@ describe('#liquidate #settle', () => {
             for (const update of baseCase.positionUpdate) {
                 const args: StringMap = {
                     address: address,
+                    instrument: 0,
                     price: update.price,
                     amount: update.amount,
                     fee_bps: update.feeBps,
@@ -200,6 +211,7 @@ describe('#liquidate #settle', () => {
             }
             const args: StringMap = {
                 address: address,
+                instrument: 0,
                 price: baseCase.price,
                 fee_bps: baseCase.feeBps,
             }
@@ -221,6 +233,7 @@ describe('#liquidate #settle', () => {
             for (const update of limitCase.positionUpdate) {
                 const args: StringMap = {
                     address: address,
+                    instrument: 0,
                     price: update.price,
                     amount: update.amount,
                     fee_bps: update.feeBps,
@@ -233,6 +246,7 @@ describe('#liquidate #settle', () => {
             }
             const args: StringMap = {
                 address: address,
+                instrument: 0,
                 price: limitCase.price,
                 fee_bps: limitCase.feeBps,
             }

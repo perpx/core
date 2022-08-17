@@ -2,8 +2,7 @@
 
 from starkware.cairo.common.cairo_builtins import HashBuiltin
 
-from contracts.library.Position import update_position, close_position, position
-from contracts.library.Position import Info
+from contracts.library.position import Position, Info
 
 @storage_var
 func delta() -> (delta : felt):
@@ -19,25 +18,25 @@ end
 
 @external
 func get_position_test{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
-    address : felt
+    address : felt, instrument : felt
 ) -> (position : Info):
-    let (_position) = position(address)
+    let (_position) = Position.position(address, instrument)
     return (position=_position)
 end
 
 @external
 func update_test{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
-    address : felt, price : felt, amount : felt, fee_bps : felt
+    address : felt, instrument : felt, price : felt, amount : felt, fee_bps : felt
 ) -> ():
-    update_position(address, price, amount, fee_bps)
+    Position.update_position(address, instrument, price, amount, fee_bps)
     return ()
 end
 
 @external
 func close_test{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
-    address : felt, price : felt, fee_bps : felt
+    address : felt, instrument : felt, price : felt, fee_bps : felt
 ) -> ():
-    let (delt) = close_position(address, price, fee_bps)
+    let (delt) = Position.close_position(address, instrument, price, fee_bps)
     delta.write(delt)
     return ()
 end
