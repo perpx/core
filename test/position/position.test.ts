@@ -9,13 +9,13 @@ import {
     POSITION_UPDATE_BASE_TEST_CASES,
     POSITION_UPDATE_REVERT_TEST_CASES,
     POSITION_UPDATE_LIMIT_TEST_CASES,
-} from './test-cases/PositionUpdateTestCases'
+} from '../test-cases/PositionUpdateTestCases'
 import {
     POSITION_LIQUIDATE_BASE_TEST_CASES_GENERAL,
     POSITION_LIQUIDATE_BASE_TEST_CASES_SHORT,
     POSITION_LIQUIDATE_LIMIT_TEST_CASES,
     PositionLiquidateTestCase,
-} from './test-cases/PositionLiquidateTestCases'
+} from '../test-cases/PositionLiquidateTestCases'
 
 let contract: StarknetContract
 let address: bigint
