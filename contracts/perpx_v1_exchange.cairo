@@ -90,10 +90,9 @@ end
 
 @constructor
 func constructor{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
-    instrument_count : felt
+    owner : felt, instrument_count : felt
 ):
-    let (caller) = get_caller_address()
-    init_access_control(caller)
+    init_access_control(owner)
     storage_instrument_count.write(instrument_count)
     return ()
 end
@@ -214,20 +213,47 @@ end
 # @param prices_len The number of instruments to update
 # @param prices The prices of the instruments to update
 # @param instruments The instruments to update
+# @dev If the list of instruments is [A, B, C, D, E, F, G] and prices update
+# @dev apply to [A, E, G], instruments = 2^0 + 2^4 + 2^6
 func update_prices{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
     prices_len : felt, prices : felt*, instruments : felt
 ) -> ():
     only_owner()
+    verify_length(length=prices_len, instruments=instruments)
     _update_prices(prices_len=prices_len, prices=prices, mult=1, instruments=instruments)
     return ()
 end
 
+# @notice Verify the length of the array matches the number of instruments updated
+# @param length The length of the array
+# @param instruments The instruments updated
+func verify_length{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+    length : felt, instruments : felt
+) -> ():
+    alloc_locals
+    if instruments == 0:
+        assert length = 0
+        return ()
+    end
+    let (q, r) = unsigned_div_rem(instruments, 2)
+    if r == 1:
+        verify_length(length=length - 1, instruments=q)
+    else:
+        verify_length(length=length, instruments=q)
+    end
+    return ()
+end
+
+# @notice Update the prices of the oracles
+# @param prices_len Number of prices to update
+# @param prices The price updates
+# @param mult The multiplication factor
+# @param instruments The instruments to update
 func _update_prices{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
     prices_len : felt, prices : felt*, mult : felt, instruments : felt
 ) -> ():
     alloc_locals
     if instruments == 0:
-        assert prices_len = 0
         return ()
     end
     let (q, r) = unsigned_div_rem(instruments, 2)

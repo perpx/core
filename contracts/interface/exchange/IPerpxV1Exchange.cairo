@@ -76,6 +76,6 @@ namespace IPerpxV1Exchange:
     # @param prices_len The number of instruments to update
     # @param prices The prices of the instruments to update
     # @param instruments The instruments to update
-    func update_price(prices_len : felt, prices : felt*, instruments : felt) -> ():
+    func update_prices(prices_len : felt, prices : felt*, instruments : felt) -> ():
     end
 end
