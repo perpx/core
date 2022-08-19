@@ -6,7 +6,10 @@ from starkware.cairo.common.math import assert_not_zero, unsigned_div_rem
 from starkware.cairo.common.uint256 import Uint256
 
 from contracts.library.position import Position
-from contracts.utils.access_control import init_access_control, only_owner
+from contracts.library.vault import Stake, Vault
+from contracts.utils.access_control import init_access_control, assert_only_owner
+from contracts.constants.perpx_constants import MAX_LIQUIDITY, ADDRESS_USDC
+from contracts.perpx_v1_instrument import update_liquidity
 
 #
 # Structures
@@ -29,7 +32,6 @@ end
 namespace IERC20:
     func transfer(recipient : felt, amount : Uint256) -> (success : felt):
     end
-
     func transferFrom(sender : felt, recipient : felt, amount : Uint256) -> (success : felt):
     end
 end
@@ -48,6 +50,14 @@ end
 
 @event
 func Liquidate(owner : felt):
+end
+
+@event
+func UpdateCollateral(owner : felt, amount : felt):
+end
+
+@event
+func UpdateLiquidity(owner : felt, amount : felt):
 end
 
 #
@@ -218,7 +228,7 @@ end
 func update_prices{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
     prices_len : felt, prices : felt*, instruments : felt
 ) -> ():
-    only_owner()
+    assert_only_owner()
     verify_length(length=prices_len, instruments=instruments)
     _update_prices(prices_len=prices_len, prices=prices, mult=1, instruments=instruments)
     return ()
@@ -288,7 +298,7 @@ func calculate_pnl{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check
     if r == 1:
         let (price) = storage_oracles.read(mult)
         let (info) = Position.position(owner, mult)
-        let new_pnl = price * info.size
+        let new_pnl = price * info.size - info.cost
         let (p) = calculate_pnl(owner=owner, instruments=q, mult=mult * 2)
         return (pnl=p + new_pnl)
     end
