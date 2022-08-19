@@ -7,41 +7,22 @@ import {
 import { expect } from 'chai'
 import { starknet } from 'hardhat'
 import { DeployOptions } from '@shardlabs/starknet-hardhat-plugin/dist/src/types'
+import {
+    getOneBits,
+    generateNBitsWord,
+    decomposeBitWord,
+} from '../utils/exchange.utils'
+import { ContractFunctionVisibility } from 'hardhat/internal/hardhat-network/stack-traces/model'
 
 let deployer: StarknetContract
 let contract: StarknetContract
 
 let account: Account
 let otherAccount: Account
+let accountAddress: BigInt
 
 const limit: number = 1_000_000_000
 const INSTRUMENTS_AMOUNT: number = 10
-
-function getOneBits(n: number) {
-    var count = 0
-    var mask = 1
-    for (let i = 0; i < 32; i++) {
-        if ((mask & n) != 0) {
-            count++
-        }
-        mask <<= 1
-    }
-    return count
-}
-
-function generateNBitsWord(n: number, limit: number) {
-    let bits: number[] = []
-    let num = 0
-    while (n > 0) {
-        let bit = Math.floor(Math.random() * limit)
-        if (!bits.includes(bit)) {
-            n--
-            bits.push(bit)
-            num += 1 << bit
-        }
-    }
-    return num
-}
 
 describe('PerpxV1Exchange', () => {
     before(async () => {
@@ -63,6 +44,7 @@ describe('PerpxV1Exchange', () => {
         // deploy accounts
         account = await starknet.deployAccount('OpenZeppelin')
         otherAccount = await starknet.deployAccount('OpenZeppelin')
+        accountAddress = BigInt(account.address)
 
         // call deploy_contract from deployer
         const args: StringMap = {
@@ -146,6 +128,80 @@ describe('PerpxV1Exchange', () => {
                     }
                     instruments >>= 1n
                     mult <<= 1
+                }
+                i++
+            }
+        })
+    })
+
+    describe('#calculate_pnl', () => {
+        it('should fail with out of range', async () => {
+            let args: StringMap = {
+                owner: accountAddress,
+                instruments: BigInt(2 ** 129),
+            }
+            try {
+                await contract.call('calculate_pnl_test', args)
+                expect.fail('should have failed with')
+            } catch (error: any) {
+                expect(error.message)
+                    .to.contain('AssertionError')
+                    .and.to.contain(
+                        'is out of range [0, 340282366920938463463374607431768211456)'
+                    )
+            }
+        })
+
+        it('should pass and calculate the pnl of the owner', async () => {
+            // initiate the price of the instruments
+            const length = INSTRUMENTS_AMOUNT
+            const instruments: bigint = (1n << BigInt(INSTRUMENTS_AMOUNT)) - 1n
+            const prices: bigint[] = Array.from({ length: length }, () =>
+                BigInt(Math.floor(Math.random() * limit))
+            )
+            let args: StringMap = {
+                prices: prices,
+                instruments: instruments,
+            }
+            await account.invoke(contract, 'update_prices_test', args)
+            const iterations: number = 20
+            let i: number = 0
+            while (i < iterations) {
+                // place position for random instruments
+                let insts: bigint = BigInt(
+                    Math.floor(Math.random() * ((1 << INSTRUMENTS_AMOUNT) - 1))
+                )
+                let positions: bigint[] = decomposeBitWord(insts)
+                console.log('INSTRUMENTS', insts, 'POSITIONS', positions)
+                let pnl: bigint = 0n
+                for (const pos of positions) {
+                    let amount: bigint = BigInt(Math.floor(Math.random() * 10))
+                    args = {
+                        address: accountAddress,
+                        instrument: pos,
+                        price: prices[Math.log2(Number(pos))],
+                        amount: amount,
+                        fee_bps: BigInt(1_500),
+                    }
+                    await contract.invoke('update_position_test', args)
+                    pnl += amount * prices[Math.log2(Number(pos))]
+                }
+                // calculate the pnl and compare to computed value
+                args = {
+                    owner: accountAddress,
+                    instruments: insts,
+                }
+                const res = await contract.call('calculate_pnl_test', args)
+                expect(res.pnl).to.equal(pnl)
+                // close all trader's positions
+                for (const pos of positions) {
+                    args = {
+                        owner: accountAddress,
+                        instrument: pos,
+                        price: 1000n,
+                        fee_bps: 1500n,
+                    }
+                    await contract.invoke('close_position_test', args)
                 }
                 i++
             }
