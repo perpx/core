@@ -113,7 +113,7 @@ func trade{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
     # TODO calculate owner pnl to check if he can trade this amount (must be X % over collateral)
     let (local owner) = get_caller_address()
     let (instruments) = storage_user_instruments.read(owner)
-    let (pnl) = calculate_pnl(owner=owner, instruments=instruments, mul=1, pnl=0)
+    let (pnl) = calculate_pnl(owner=owner, instruments=instruments, mult=1)
     # TODO batch the trade
     let (price) = storage_oracles.read(instrument)
     # TODO change the fee
@@ -270,21 +270,28 @@ end
 # Internal
 #
 
+# @notice Calculates the owner pnl
+# @dev Internal function
+# @param owner The owner of the positions
+# @param instruments The instruments traded by owner
+# @param mult The multiplication factor
+# @param pnl The pnl of the owner
+# @return pnl The pnl of the owner
 func calculate_pnl{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
-    owner : felt, instruments : felt, mul : felt, pnl : felt
+    owner : felt, instruments : felt, mult : felt
 ) -> (pnl : felt):
     alloc_locals
     if instruments == 0:
-        return (pnl=pnl)
+        return (pnl=0)
     end
     let (q, r) = unsigned_div_rem(instruments, 2)
     if r == 1:
-        let (price) = storage_oracles.read(mul)
-        let (info) = Position.position(owner, mul)
+        let (price) = storage_oracles.read(mult)
+        let (info) = Position.position(owner, mult)
         let new_pnl = price * info.size
-        let (p) = calculate_pnl(owner=owner, instruments=q, mul=mul * 2, pnl=new_pnl)
-        return (pnl=p + pnl)
+        let (p) = calculate_pnl(owner=owner, instruments=q, mult=mult * 2)
+        return (pnl=p + new_pnl)
     end
-    let (p) = calculate_pnl(owner=owner, instruments=q, mul=mul * 2, pnl=pnl)
-    return (pnl=p + pnl)
+    let (p) = calculate_pnl(owner=owner, instruments=q, mult=mult * 2)
+    return (pnl=p)
 end
