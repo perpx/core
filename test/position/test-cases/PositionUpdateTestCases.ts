@@ -11,7 +11,7 @@ const POSITION_UPDATE_BASE_TEST_CASES: PositionUpdateTestCase[] = [
     {
         description: 'price 0, amount 0, feeBps 0',
         price: BigInt(0),
-        amount: BigInt(-(2**83)+2),
+        amount: BigInt(0),
         feeBps: BigInt(0),
     },
     {
