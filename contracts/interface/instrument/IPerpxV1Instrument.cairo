@@ -1,77 +1,34 @@
 %lang starknet
 
-from starkware.cairo.common.uint256 import Uint256
+from contracts.library.position import Info
+
 # @title The interface for a perpx instrument
-# @notice A perpx instrument facilitates longing and shorting any data feed
-# @dev Contract broken down in 4 levels:
-# @dev Permissionless contract methods
-# @dev Immutable contract state
-# @dev Mutable contract state
-# @dev Owner methods
+# @notice A perpx instrument keeps track of a pool's liquidity, longs and shorts
 
 @contract_interface
 namespace IPerpxV1Instrument:
-    # PERMISSIONLESS
+    # @notice Returns the liquidity for the instrument
+    # @param instrument The instrument's id
+    # @return liquidity The liquidity for the instrument
+    func get_liquidity(instrument : felt) -> (liquidity : felt):
+    end
 
-    # @notice Trade an amount of the index
-    # @param amount The amount to trade of
-    func trade(amount : Uint256) -> ():
+    # @notice Returns the owner's provided liquidity for the instrument
+    # @param instrument The instrument's id
+    # @param owner The owner
+    # @return liquidity The liquidity provided by owner for the instrument
+    func get_user_liquidity(owner : felt, instrument : felt) -> (liquidity : felt):
     end
-    # @notice Liquidate the instrument position from the owner
-    # @param owner The owner of the position
-    func liquidate(owner : felt) -> ():
-    end
-    ################################################################################
 
-    # IMMUTABLE
-
-    # @notice The exchange contract
-    # @return address The exchange contract address
-    func exchange() -> (address : felt):
+    # @notice Returns the notional amount of longs for the instrument
+    # @param instrument The instrument's id
+    # @return amount The notional amount of longs for the instrument
+    func get_longs(instrument : felt) -> (amount : felt):
     end
-    # @notice The collateral token
-    # @return address The collateral token address
-    func collateral_token() -> (address : felt):
-    end
-    ################################################################################
-
-    # MUTABLE
-
-    # @notice Returns the information about a position by the position's owner
-    # @param owner The position's key is the owner
-    # @return fees The amount of fees paid by the owner,
-    # cost The current cost of the open position
-    # size The current size of the open position
-    func positions(address : felt) -> (fees : felt, cost : felt, size : felt):
-    end
-    # @notice Returns the imbalance of the pool
-    # @return The imbalance of the pool
-    func imbalance() -> (imbalance : felt):
-    end
-    # @notice Returns the amount of open interests in the pool
-    # @return open_interests The amount of open interests in the pool
-    func open_interests() -> (open_interests : Uint256):
-    end
-    # @notice Returns the price of the instrument
-    # @return price The price of the instrument
-    func price() -> (price : felt):
-    end
-    # @notice Returns the fee of the instrument
-    # @return fee The fee of the instrument
-    func fee() -> (fee : felt):
-    end
-    ################################################################################
-
-    # OWNER
-
-    # @notice Set the value of the instrument
-    # @param value The value of the instrument
-    func update_value(value : Uint256) -> ():
-    end
-    # @notice Settle the position of the owner, set fees and pnl to zero
-    # @param owner The owner of the position
-    # @return delta The change in the user collateral
-    func settle_position(address : felt) -> (delta : felt):
+    # @notice Returns the notional amount of shorts for the instrument
+    # @param instrument The instrument's id
+    # @return amount The notional amount of shorts for the instrument
+    func get_shorts(instrument : felt) -> (amount : felt):
     end
     ################################################################################
 end
