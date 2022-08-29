@@ -1,60 +1,182 @@
 %lang starknet
 
 from starkware.cairo.common.cairo_builtins import HashBuiltin
-from contracts.library.rewards import Reward
-from contracts.perpx_v1_instrument import update_liquidity, get_liquidity, get_user_liquidity
+from contracts.library.rewards import Reward, Stake
+from contracts.test.rewards_test import provide_liquidity_test, view_shares, view_user_stake
 
+#
+# Constants
+#
+
+const INITIAL_SHARES = 2 ** 50
+const INITIAL_USER_SHARES = 2 ** 30
+const INITIAL_LIQUIDITY = 2 ** 60
+const INITIAL_USER_LIQUIDITY = 2 ** 40
+
+const OWNER = 1
 const INSTRUMENT = 1
 
-@storage_var
-func storage_shares_test() -> (value : felt):
+const LIQUIDITY_INCREASE = 2 ** 10
+
+#
+# Interface
+#
+
+@contract_interface
+namespace TestContract:
+    func provide_liquidity_test(amount : felt, address : felt, instrument : felt) -> ():
+    end
+    func withdraw_liquidity_test(amount : felt, address : felt, instrument : felt) -> ():
+    end
+    func view_shares(instrument : felt) -> (shares : felt):
+    end
+    func view_user_stake(owner : felt, instrument : felt) -> (stake : Stake):
+    end
+    func view_liquidity(instrument : felt) -> (liquidity : felt):
+    end
 end
 
-@storage_var
-func storage_user_shares_test(owner : felt) -> (value : felt):
+#
+# Setup
+#
+
+@external
+func __setup__():
+    alloc_locals
+    local address
+    %{
+        context.contract_address = deploy_contract("./contracts/test/rewards_test.cairo").contract_address 
+        ids.address = context.contract_address
+        store(context.contract_address, "storage_liquidity", [ids.INITIAL_LIQUIDITY], key=[ids.INSTRUMENT])
+        store(context.contract_address, "storage_user_liquidity", [ids.INITIAL_USER_LIQUIDITY], key=[ids.OWNER, ids.INSTRUMENT])
+
+        store(context.contract_address, "storage_shares", [ids.INITIAL_SHARES], key=[ids.INSTRUMENT])
+        store(context.contract_address, "storage_user_stake", [ids.INITIAL_USER_LIQUIDITY, ids.INITIAL_USER_SHARES], key=[ids.OWNER, ids.INSTRUMENT])
+    %}
+
+    return ()
 end
 
-@storage_var
-func storage_liquidity_test() -> (value : felt):
-end
+#
+# Tests
+#
 
 @external
 func test_provide_liquidity{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
     rand : felt
-) -> ():
+):
     alloc_locals
     local amount
-    local owner
     local rand = rand
+    local address
     %{
+        ids.address = context.contract_address
+        assume(ids.rand != 0)
         ids.amount = ids.rand % (2**64)
-        ids.owner = ids.rand % 5
     %}
-    Reward.provide_liquidity(amount=amount, address=owner, instrument=INSTRUMENT)
-    update_liquidity(owner=owner, instrument=INSTRUMENT, amount=amount)
+    # retrieve liquidity, shares and user_shares
+    let (local pre_liquidity) = TestContract.view_liquidity(
+        contract_address=address, instrument=INSTRUMENT
+    )
+    let (local pre_shares) = TestContract.view_shares(
+        contract_address=address, instrument=INSTRUMENT
+    )
+    let (local pre_user_stake : Stake) = TestContract.view_user_stake(
+        contract_address=address, owner=OWNER, instrument=INSTRUMENT
+    )
 
-    let (local shares) = Reward.view_shares(instrument=INSTRUMENT)
-    let (local user_shares) = Reward.view_user_shares(owner=owner, instrument=INSTRUMENT)
+    # provide test liquidity
+    TestContract.provide_liquidity_test(
+        contract_address=address, amount=amount, address=OWNER, instrument=INSTRUMENT
+    )
 
-    let (local liquidity) = storage_liquidity_test.read()
+    # get shares and user_shares
+    let (local shares) = TestContract.view_shares(contract_address=address, instrument=INSTRUMENT)
+    let (local user_stake : Stake) = TestContract.view_user_stake(
+        contract_address=address, owner=OWNER, instrument=INSTRUMENT
+    )
 
-    let (local fuzz_shares) = storage_shares_test.read()
-    let (local fuzz_user_shares) = storage_user_shares_test.read(owner)
     %{
-        if ids.liquidity == 0:
+        if ids.pre_liquidity == 0:
             inc = ids.amount * 100
         else:
-            inc = ids.amount * ids.fuzz_shares / ids.liquidity
-        assert (ids.fuzz_shares + inc) == ids.shares, f'shares: {ids.fuzz_shares + inc} different from {ids.shares}'
-        assert (ids.fuzz_user_shares + inc) == ids.user_shares, f'user_shares: {ids.fuzz_user_shares + inc} different from {ids.user_shares}'
+            inc = ids.amount * ids.pre_shares // ids.pre_liquidity
+        assert (ids.pre_shares + inc) == ids.shares, f'shares: {ids.pre_shares + inc} different from {ids.shares}'
+        assert (ids.pre_user_stake.shares + inc) == ids.user_stake.shares, f'user_shares: {ids.pre_user_stake.shares + inc} different from {ids.user_stake.shares}'
+        assert (ids.pre_user_stake.amount + ids.amount) == ids.user_stake.amount, f'user_amount: {ids.pre_user_stake.amount + inc} different from {ids.user_stake.amount}'
     %}
 
-    let new_liquidity = amount + liquidity
-    storage_liquidity_test.write(new_liquidity)
-    let new_shares = amount + fuzz_shares
-    storage_shares_test.write(new_shares)
-    let new_user_shares = amount + fuzz_user_shares
-    storage_user_shares_test.write(owner, new_user_shares)
+    return ()
+end
 
+@external
+func test_withdraw_liquidity_revert{
+    syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr
+}():
+    alloc_locals
+    # try to withdraw with null amount
+    %{ expect_revert(error_message="null amount") %}
+    Reward.withdraw_liquidity(amount=0, address=0, instrument=1)
+
+    # provide then try to retrieve more
+    %{ expect_revert(error_message="insufficient balance") %}
+    Reward.provide_liquidity(amount=100, address=0, instrument=1)
+    Reward.withdraw_liquidity(amount=101, address=0, instrument=1)
+
+    # should withdraw
+    Reward.withdraw_liquidity(amount=100, address=0, instrument=1)
+    let (local user_stake : Stake) = Reward.view_user_stake(owner=OWNER, instrument=INSTRUMENT)
+    %{
+        assert user_stake.amount == 0, f'user_amount: expected 0'
+        assert user_stake.shares == 0, f'user_shares: expected 0'
+    %}
+
+    return ()
+end
+
+@external
+func test_withdraw_liquidity{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+    rand : felt
+):
+    alloc_locals
+    local amount
+    local address
+    local rand = rand
+    %{
+        ids.address = context.contract_address
+        assume(ids.rand != 0)
+        amount = ids.rand%ids.INITIAL_USER_LIQUIDITY
+        ids.amount = amount + 1
+    %}
+    TestContract.provide_liquidity_test(
+        contract_address=address, amount=LIQUIDITY_INCREASE, address=OWNER, instrument=INSTRUMENT
+    )
+    # withdraw liquidity, shares and user_shares
+    let (local pre_liquidity) = TestContract.view_liquidity(
+        contract_address=address, instrument=INSTRUMENT
+    )
+    let (local pre_shares) = TestContract.view_shares(
+        contract_address=address, instrument=INSTRUMENT
+    )
+    let (local pre_user_stake : Stake) = TestContract.view_user_stake(
+        contract_address=address, owner=OWNER, instrument=INSTRUMENT
+    )
+
+    TestContract.withdraw_liquidity_test(
+        contract_address=address, amount=amount, address=OWNER, instrument=INSTRUMENT
+    )
+
+    let (local shares) = TestContract.view_shares(contract_address=address, instrument=INSTRUMENT)
+    let (local user_stake : Stake) = TestContract.view_user_stake(
+        contract_address=address, owner=OWNER, instrument=INSTRUMENT
+    )
+
+    %{
+        share_dec = ids.amount * ids.pre_shares // ids.pre_liquidity
+        user_share_dec = ids.amount * ids.pre_user_stake.shares // ids.pre_user_stake.amount
+        assert (ids.pre_shares - share_dec) == ids.shares,  f'shares: {ids.pre_shares + share_dec} different from {ids.shares}'
+        assert (ids.pre_user_stake.shares - user_share_dec) == ids.user_stake.shares,  f'user_shares: {ids.pre_user_stake.shares - user_share_dec} different from {ids.user_stake.shares}'
+        assert (ids.pre_user_stake.amount - ids.amount) == ids.user_stake.amount,  f'user_amount: {ids.pre_user_stake.amount - amount} different from {ids.user_stake.amount}'
+    %}
     return ()
 end

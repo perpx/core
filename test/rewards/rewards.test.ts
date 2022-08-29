@@ -5,14 +5,20 @@ import {
 } from 'hardhat/types/runtime'
 import { expect } from 'chai'
 import { starknet } from 'hardhat'
-import { REWARD_LIMIT_CASES } from './test-cases/simple-reward-test-cases'
+import {
+    REWARD_PROVIDE_LIMIT_CASES,
+    REWARD_WITHDRAW_LIMIT_CASES,
+} from './test-cases/rewards-test-cases'
 
 let contract: StarknetContract
 
 // constants
 const INSTRUMENT: bigint = 1n
-const address: bigint = BigInt(
+const provideAddress: bigint = BigInt(
     '0x60adf7d4250d8f1bc5b380381219b0e7b964dd9017ee95a932ac69eff4300d4'
+)
+const withdrawAddress: bigint = BigInt(
+    '0x44cd43437e6efd23da1631301b102ef5a0f3e6e27c41c1aadd0f718ebe83e86'
 )
 
 //utils
@@ -44,11 +50,14 @@ async function check(
     })
     expect(resShares.shares).to.equal(shares, 'failed on shares')
     // user shares
-    const resUserShares = await contract.call('view_user_shares', {
+    const resUserShares = await contract.call('view_user_stake', {
         owner: address,
         instrument: instrument,
     })
-    expect(resUserShares.shares).to.equal(userShares, 'failed on user shares')
+    expect(resUserShares.stake.shares).to.equal(
+        userShares,
+        'failed on user shares'
+    )
 }
 
 before(async () => {
@@ -57,15 +66,15 @@ before(async () => {
     contract = await contractFactory.deploy()
 })
 
-describe('#update', () => {
+describe('#provide_liquidity', () => {
     it('should pass for all limit cases', async () => {
         let liquidity: bigint = 0n
         let shares: bigint = 0n
-        for (const scenario of REWARD_LIMIT_CASES) {
+        for (const scenario of REWARD_PROVIDE_LIMIT_CASES) {
             for (const cas of scenario) {
                 const args: StringMap = {
                     amount: cas.amount,
-                    address: address,
+                    address: provideAddress,
                     instrument: INSTRUMENT,
                 }
                 await contract.invoke('provide_liquidity_test', args)
@@ -77,8 +86,41 @@ describe('#update', () => {
                     shares += inc
                 }
                 liquidity += cas.amount
-                check(address, INSTRUMENT, liquidity, shares, liquidity, shares)
+                await check(
+                    provideAddress,
+                    INSTRUMENT,
+                    liquidity,
+                    shares,
+                    liquidity,
+                    shares
+                )
             }
+        }
+        const args: StringMap = {
+            amount: liquidity,
+            address: provideAddress,
+            instrument: INSTRUMENT,
+        }
+        await contract.invoke('withdraw_liquidity_test', args)
+    })
+})
+
+describe('#withdraw_liquidity', () => {
+    it('should pass for all limit cases', async () => {
+        for (const scenario of REWARD_WITHDRAW_LIMIT_CASES) {
+            for (const cas of scenario) {
+                const args: StringMap = {
+                    amount: cas.amount < 0 ? -cas.amount : cas.amount,
+                    address: withdrawAddress,
+                    instrument: INSTRUMENT,
+                }
+                if (cas.amount > 0n) {
+                    await contract.invoke('provide_liquidity_test', args)
+                } else {
+                    await contract.invoke('withdraw_liquidity_test', args)
+                }
+            }
+            await check(withdrawAddress, INSTRUMENT, 0n, 0n, 0n, 0n)
         }
     })
 })

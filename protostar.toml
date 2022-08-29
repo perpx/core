@@ -12,6 +12,10 @@ main = [
     "./contracts/library/rewards.cairo",
 ]
 
+test = [
+    "./contracts/test/rewards_test.cairo",
+]
+
 ["protostar.test"]
 cairo-path = [
     "./protostar-test/"

@@ -6,7 +6,7 @@ interface RewardTestCase {
 
 const MAX_LIQUIDITY = BigInt(2 ** 64)
 
-const REWARD_LIMIT_CASES: RewardTestCase[][] = [
+const REWARD_PROVIDE_LIMIT_CASES: RewardTestCase[][] = [
     [
         {
             description: 'amount 1, runs twice',
@@ -39,4 +39,31 @@ const REWARD_LIMIT_CASES: RewardTestCase[][] = [
     ],
 ]
 
-export { REWARD_LIMIT_CASES }
+const REWARD_WITHDRAW_LIMIT_CASES: RewardTestCase[][] = [
+    [
+        {
+            description: 'provide amount MAX_LIQUIDITY',
+            amount: MAX_LIQUIDITY,
+        },
+        {
+            description: 'withdraw amount MAX_LIQUIDITY',
+            amount: -1n * MAX_LIQUIDITY,
+        },
+    ],
+    [
+        {
+            description: 'provide amount MAX_LIQUIDITY',
+            amount: MAX_LIQUIDITY,
+        },
+        {
+            description: 'withdraw amount MAX_LIQUIDITY/2',
+            amount: (-1n * MAX_LIQUIDITY) / 2n,
+        },
+        {
+            description: 'withdraw amount MAX_LIQUIDITY/2',
+            amount: (-1n * MAX_LIQUIDITY) / 2n,
+        },
+    ],
+]
+
+export { REWARD_PROVIDE_LIMIT_CASES, REWARD_WITHDRAW_LIMIT_CASES }

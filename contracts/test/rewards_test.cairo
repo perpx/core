@@ -1,8 +1,8 @@
 %lang starknet
 
 from starkware.cairo.common.cairo_builtins import HashBuiltin
-from contracts.library.rewards import Reward
-from contracts.perpx_v1_instrument import update_liquidity, get_liquidity, get_user_liquidity
+from contracts.library.rewards import Reward, Stake
+from contracts.perpx_v1_instrument import get_liquidity, get_user_liquidity, update_liquidity
 
 @external
 func provide_liquidity_test{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
@@ -10,6 +10,15 @@ func provide_liquidity_test{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, ra
 ) -> ():
     Reward.provide_liquidity(amount=amount, address=address, instrument=instrument)
     update_liquidity(address, instrument, amount)
+    return ()
+end
+
+@external
+func withdraw_liquidity_test{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+    amount : felt, address : felt, instrument : felt
+) -> ():
+    Reward.withdraw_liquidity(amount=amount, address=address, instrument=instrument)
+    update_liquidity(address, instrument, -amount)
     return ()
 end
 
@@ -22,11 +31,11 @@ func view_shares{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_p
 end
 
 @view
-func view_user_shares{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+func view_user_stake{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
     owner : felt, instrument : felt
-) -> (shares : felt):
-    let (shares) = Reward.view_user_shares(owner, instrument)
-    return (shares=shares)
+) -> (stake : Stake):
+    let (stake) = Reward.view_user_stake(owner, instrument)
+    return (stake=stake)
 end
 
 @view
