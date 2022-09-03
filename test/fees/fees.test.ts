@@ -38,7 +38,7 @@ describe('#calculate_fee_bps', async () => {
                 expect.fail("should have failed")
             }
             catch(error: any) {
-                expect(error.message)
+                expect(error.message).to.contain.oneOf(['in range check builtin 1, is out of range', 'AssertionError: assert_not_zero failed: 0 = 0.'])
             } 
         })
     }
