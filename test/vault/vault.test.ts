@@ -6,9 +6,9 @@ import {
 import { expect } from 'chai'
 import { starknet } from 'hardhat'
 import {
-    REWARD_PROVIDE_LIMIT_CASES,
-    REWARD_WITHDRAW_LIMIT_CASES,
-} from './test-cases/rewards-test-cases'
+    VAULT_PROVIDE_LIMIT_CASES,
+    VAULT_WITHDRAW_LIMIT_CASES,
+} from './test-cases/vault-test-cases'
 
 let contract: StarknetContract
 
@@ -35,34 +35,29 @@ async function check(
         instrument: instrument,
     })
     expect(resLiq.liquidity).to.equal(liquidity, 'failed on liquidity')
-    // user liquidity
-    const resUserLiq = await contract.call('view_user_liquidity', {
-        owner: address,
-        instrument: 1n,
-    })
-    expect(resUserLiq.liquidity).to.equal(
-        userLiquidity,
-        'failed on user liquidity'
-    )
     // shares
     const resShares = await contract.call('view_shares', {
         instrument: instrument,
     })
     expect(resShares.shares).to.equal(shares, 'failed on shares')
-    // user shares
-    const resUserShares = await contract.call('view_user_stake', {
+    // user liquidity and shares
+    const resUserStake = await contract.call('view_user_stake', {
         owner: address,
         instrument: instrument,
     })
-    expect(resUserShares.stake.shares).to.equal(
+    expect(resUserStake.stake.shares).to.equal(
         userShares,
         'failed on user shares'
+    )
+    expect(resUserStake.stake.amount).to.equal(
+        userLiquidity,
+        'failed on user liquidity'
     )
 }
 
 before(async () => {
     const contractFactory: StarknetContractFactory =
-        await starknet.getContractFactory('test/rewards_test.cairo')
+        await starknet.getContractFactory('test/vault_test.cairo')
     contract = await contractFactory.deploy()
 })
 
@@ -70,11 +65,11 @@ describe('#provide_liquidity', () => {
     it('should pass for all limit cases', async () => {
         let liquidity: bigint = 0n
         let shares: bigint = 0n
-        for (const scenario of REWARD_PROVIDE_LIMIT_CASES) {
+        for (const scenario of VAULT_PROVIDE_LIMIT_CASES) {
             for (const cas of scenario) {
                 const args: StringMap = {
                     amount: cas.amount,
-                    address: provideAddress,
+                    owner: provideAddress,
                     instrument: INSTRUMENT,
                 }
                 await contract.invoke('provide_liquidity_test', args)
@@ -98,7 +93,7 @@ describe('#provide_liquidity', () => {
         }
         const args: StringMap = {
             amount: liquidity,
-            address: provideAddress,
+            owner: provideAddress,
             instrument: INSTRUMENT,
         }
         await contract.invoke('withdraw_liquidity_test', args)
@@ -107,11 +102,11 @@ describe('#provide_liquidity', () => {
 
 describe('#withdraw_liquidity', () => {
     it('should pass for all limit cases', async () => {
-        for (const scenario of REWARD_WITHDRAW_LIMIT_CASES) {
+        for (const scenario of VAULT_WITHDRAW_LIMIT_CASES) {
             for (const cas of scenario) {
                 const args: StringMap = {
                     amount: cas.amount < 0 ? -cas.amount : cas.amount,
-                    address: withdrawAddress,
+                    owner: withdrawAddress,
                     instrument: INSTRUMENT,
                 }
                 if (cas.amount > 0n) {

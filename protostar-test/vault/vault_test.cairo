@@ -1,8 +1,8 @@
 %lang starknet
 
 from starkware.cairo.common.cairo_builtins import HashBuiltin
-from contracts.library.rewards import Reward, Stake
-from contracts.test.rewards_test import provide_liquidity_test, view_shares, view_user_stake
+from contracts.library.vault import Vault, Stake
+from contracts.test.vault_test import provide_liquidity_test, view_shares, view_user_stake
 
 #
 # Constants
@@ -24,9 +24,9 @@ const LIQUIDITY_INCREASE = 2 ** 10
 
 @contract_interface
 namespace TestContract:
-    func provide_liquidity_test(amount : felt, address : felt, instrument : felt) -> ():
+    func provide_liquidity_test(amount : felt, owner : felt, instrument : felt) -> ():
     end
-    func withdraw_liquidity_test(amount : felt, address : felt, instrument : felt) -> ():
+    func withdraw_liquidity_test(amount : felt, owner : felt, instrument : felt) -> ():
     end
     func view_shares(instrument : felt) -> (shares : felt):
     end
@@ -45,10 +45,9 @@ func __setup__():
     alloc_locals
     local address
     %{
-        context.contract_address = deploy_contract("./contracts/test/rewards_test.cairo").contract_address 
+        context.contract_address = deploy_contract("./contracts/test/vault_test.cairo").contract_address 
         ids.address = context.contract_address
         store(context.contract_address, "storage_liquidity", [ids.INITIAL_LIQUIDITY], key=[ids.INSTRUMENT])
-        store(context.contract_address, "storage_user_liquidity", [ids.INITIAL_USER_LIQUIDITY], key=[ids.OWNER, ids.INSTRUMENT])
 
         store(context.contract_address, "storage_shares", [ids.INITIAL_SHARES], key=[ids.INSTRUMENT])
         store(context.contract_address, "storage_user_stake", [ids.INITIAL_USER_LIQUIDITY, ids.INITIAL_USER_SHARES], key=[ids.OWNER, ids.INSTRUMENT])
@@ -87,7 +86,7 @@ func test_provide_liquidity{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, ra
 
     # provide test liquidity
     TestContract.provide_liquidity_test(
-        contract_address=address, amount=amount, address=OWNER, instrument=INSTRUMENT
+        contract_address=address, amount=amount, owner=OWNER, instrument=INSTRUMENT
     )
 
     # get shares and user_shares
@@ -116,16 +115,16 @@ func test_withdraw_liquidity_revert{
     alloc_locals
     # try to withdraw with null amount
     %{ expect_revert(error_message="null amount") %}
-    Reward.withdraw_liquidity(amount=0, address=0, instrument=1)
+    Vault.withdraw_liquidity(amount=0, owner=0, instrument=1)
 
     # provide then try to retrieve more
     %{ expect_revert(error_message="insufficient balance") %}
-    Reward.provide_liquidity(amount=100, address=0, instrument=1)
-    Reward.withdraw_liquidity(amount=101, address=0, instrument=1)
+    Vault.provide_liquidity(amount=100, owner=0, instrument=1)
+    Vault.withdraw_liquidity(amount=101, owner=0, instrument=1)
 
     # should withdraw
-    Reward.withdraw_liquidity(amount=100, address=0, instrument=1)
-    let (local user_stake : Stake) = Reward.view_user_stake(owner=OWNER, instrument=INSTRUMENT)
+    Vault.withdraw_liquidity(amount=100, owner=0, instrument=1)
+    let (local user_stake : Stake) = Vault.view_user_stake(owner=OWNER, instrument=INSTRUMENT)
     %{
         assert user_stake.amount == 0, f'user_amount: expected 0'
         assert user_stake.shares == 0, f'user_shares: expected 0'
@@ -149,7 +148,7 @@ func test_withdraw_liquidity{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, r
         ids.amount = amount + 1
     %}
     TestContract.provide_liquidity_test(
-        contract_address=address, amount=LIQUIDITY_INCREASE, address=OWNER, instrument=INSTRUMENT
+        contract_address=address, amount=LIQUIDITY_INCREASE, owner=OWNER, instrument=INSTRUMENT
     )
     # withdraw liquidity, shares and user_shares
     let (local pre_liquidity) = TestContract.view_liquidity(
@@ -163,7 +162,7 @@ func test_withdraw_liquidity{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, r
     )
 
     TestContract.withdraw_liquidity_test(
-        contract_address=address, amount=amount, address=OWNER, instrument=INSTRUMENT
+        contract_address=address, amount=amount, owner=OWNER, instrument=INSTRUMENT
     )
 
     let (local shares) = TestContract.view_shares(contract_address=address, instrument=INSTRUMENT)

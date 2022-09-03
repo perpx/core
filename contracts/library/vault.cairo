@@ -1,11 +1,9 @@
 %lang starknet
 
 from starkware.cairo.common.cairo_builtins import HashBuiltin
-from starkware.cairo.common.math_cmp import is_nn
 from starkware.cairo.common.math import unsigned_div_rem, assert_nn
 from starkware.starknet.common.syscalls import get_block_timestamp
 
-from contracts.perpx_v1_instrument import get_liquidity
 from contracts.constants.perpx_constants import SHARE_PRECISION, LIQUIDITY_PRECISION
 
 #
@@ -20,6 +18,9 @@ end
 #
 # Storage
 #
+@storage_var
+func storage_liquidity(instrument : felt) -> (liquidity : felt):
+end
 
 @storage_var
 func storage_shares(instrument : felt) -> (shares : felt):
@@ -29,7 +30,7 @@ end
 func storage_user_stake(owner : felt, instrument : felt) -> (stake : Stake):
 end
 
-namespace Reward:
+namespace Vault:
     #
     # Functions
     #
@@ -47,19 +48,27 @@ namespace Reward:
         return (stake=stake)
     end
 
+    func view_liquidity{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+        instrument : felt
+    ) -> (liquidity : felt):
+        let (_liquidity) = storage_liquidity.read(instrument)
+        return (liquidity=_liquidity)
+    end
+
     # @notice Provide liquidity to the pool for target instrument
     # @dev Formula to implement is amount*shares/liquidity
     # @param amount The amount of liquidity provided (precision: 6)
-    # @param address The address of the provider
+    # @param owner The address of the provider
     # @param instrument The instrument to provide liquidity for
     func provide_liquidity{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
-        amount : felt, address : felt, instrument : felt
+        amount : felt, owner : felt, instrument : felt
     ) -> ():
         alloc_locals
 
         let (shares) = storage_shares.read(instrument)
-        let (user_stake) = storage_user_stake.read(address, instrument)
-        let (liquidity) = get_liquidity(instrument)
+        let (user_stake) = storage_user_stake.read(owner, instrument)
+        let (liquidity) = storage_liquidity.read(instrument)
+        let new_liquidity = liquidity + amount
 
         let (local ts) = get_block_timestamp()
 
@@ -68,8 +77,9 @@ namespace Reward:
             let init_shares = amount * factor
             storage_shares.write(instrument, init_shares)
             storage_user_stake.write(
-                address, instrument, Stake(amount=amount, shares=init_shares, timestamp=ts)
+                owner, instrument, Stake(amount=amount, shares=init_shares, timestamp=ts)
             )
+            storage_liquidity.write(instrument, new_liquidity)
             return ()
         end
 
@@ -78,23 +88,25 @@ namespace Reward:
         tempvar new_user_shares = user_stake.shares + shares_increase
         tempvar new_amount = user_stake.amount + amount
         storage_user_stake.write(
-            address, instrument, Stake(amount=new_amount, shares=new_user_shares, timestamp=ts)
+            owner, instrument, Stake(amount=new_amount, shares=new_user_shares, timestamp=ts)
         )
 
         tempvar new_shares = shares + shares_increase
         storage_shares.write(instrument, new_shares)
+
+        storage_liquidity.write(instrument, new_liquidity)
 
         return ()
     end
 
     # @notice Withdraw liquidity from the pool for target instrument
     # @param amount The amount of liquidity to withdraw (precision: 6)
-    # @param address The address of the provider
+    # @param owner The address of the provider
     # @param instrument The instrument to withdraw liquidity from
     func withdraw_liquidity{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
-        amount : felt, address : felt, instrument : felt
+        amount : felt, owner : felt, instrument : felt
     ) -> ():
-        let (user_stake) = storage_user_stake.read(address, instrument)
+        let (user_stake) = storage_user_stake.read(owner, instrument)
 
         with_attr error_message("null amount"):
             assert_nn(amount - 1)
@@ -106,7 +118,8 @@ namespace Reward:
         end
 
         let (shares) = storage_shares.read(instrument)
-        let (liquidity) = get_liquidity(instrument)
+        let (liquidity) = storage_liquidity.read(instrument)
+        let new_liquidity = liquidity - amount
 
         let temp_user = amount * user_stake.shares
         let (user_shares_sub, _) = unsigned_div_rem(temp_user, user_stake.amount)
@@ -117,11 +130,12 @@ namespace Reward:
         let new_pool_shares = shares - pool_shares_sub
 
         storage_user_stake.write(
-            address,
+            owner,
             instrument,
             Stake(amount=new_amount, shares=new_user_shares, timestamp=user_stake.timestamp),
         )
         storage_shares.write(instrument, new_pool_shares)
+        storage_liquidity.write(instrument, new_liquidity)
 
         return ()
     end

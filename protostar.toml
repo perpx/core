@@ -9,11 +9,10 @@ output = "./starknet-artifacts/protostar"
 
 ["protostar.contracts"]
 main = [
-    "./contracts/library/rewards.cairo",
+    "./contracts/library/vault.cairo",
 ]
-
 test = [
-    "./contracts/test/rewards_test.cairo",
+    "./contracts/test/vault_test.cairo",
 ]
 
 ["protostar.test"]

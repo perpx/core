@@ -2,37 +2,7 @@
 
 from starkware.cairo.common.cairo_builtins import HashBuiltin
 from starkware.cairo.common.math import assert_not_zero
-from starkware.starknet.common.syscalls import get_caller_address
-
-#
-# Events
-#
-@event
-func access_control_initialized(owner : felt):
-end
-
-#
-# Storage
-#
-
-@storage_var
-func storage_owner() -> (owner : felt):
-end
-
-#
-# Modifiers
-#
-
-# @notice Modifier for only owner callables
-func only_owner{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}() -> ():
-    let (caller) = get_caller_address()
-    let (_owner) = storage_owner.read()
-
-    with_attr error_message("callable limited to owner"):
-        assert caller = _owner
-    end
-    return ()
-end
+from openzeppelin.access.ownable.library import Ownable
 
 #
 # Functions
@@ -48,15 +18,29 @@ func init_access_control{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range
         assert_not_zero(owner)
     end
 
-    storage_owner.write(owner)
+    Ownable.initializer(owner)
 
-    access_control_initialized.emit(owner)
+    return ()
+end
+
+# @notice Checks contract owner is caller
+func assert_only_owner{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}() -> ():
+    Ownable.assert_only_owner()
+    return ()
+end
+
+# @notice Transfers contract ownership
+# @param new_owner The new contract owner
+func transfer_ownership{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+    new_owner : felt
+) -> ():
+    Ownable.transfer_ownership(new_owner=new_owner)
     return ()
 end
 
 # @notice View the contract owner
 # @return owner The contract owner
 func owner{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}() -> (owner : felt):
-    let (_owner) = storage_owner.read()
+    let (_owner) = Ownable.owner()
     return (owner=_owner)
 end

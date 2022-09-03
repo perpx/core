@@ -3,6 +3,7 @@ import '@shardlabs/starknet-hardhat-plugin'
 module.exports = {
     solidity: '0.8.9',
     starknet: {
+        venv: 'active',
         network: 'main',
     },
     networks: {

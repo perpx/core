@@ -1,4 +1,4 @@
-interface RewardTestCase {
+interface VaultTestCase {
     description: string
     amount: bigint
     error?: string
@@ -6,7 +6,7 @@ interface RewardTestCase {
 
 const MAX_LIQUIDITY = BigInt(2 ** 64)
 
-const REWARD_PROVIDE_LIMIT_CASES: RewardTestCase[][] = [
+const VAULT_PROVIDE_LIMIT_CASES: VaultTestCase[][] = [
     [
         {
             description: 'amount 1, runs twice',
@@ -39,7 +39,7 @@ const REWARD_PROVIDE_LIMIT_CASES: RewardTestCase[][] = [
     ],
 ]
 
-const REWARD_WITHDRAW_LIMIT_CASES: RewardTestCase[][] = [
+const VAULT_WITHDRAW_LIMIT_CASES: VaultTestCase[][] = [
     [
         {
             description: 'provide amount MAX_LIQUIDITY',
@@ -66,4 +66,4 @@ const REWARD_WITHDRAW_LIMIT_CASES: RewardTestCase[][] = [
     ],
 ]
 
-export { REWARD_PROVIDE_LIMIT_CASES, REWARD_WITHDRAW_LIMIT_CASES }
+export { VAULT_PROVIDE_LIMIT_CASES, VAULT_WITHDRAW_LIMIT_CASES }
