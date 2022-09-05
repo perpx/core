@@ -1,6 +1,5 @@
 %lang starknet
 
-from contracts.library.position import Info, position, update_position, close_position
 from contracts.library.vault import Vault
 
 from starkware.cairo.common.cairo_builtins import HashBuiltin

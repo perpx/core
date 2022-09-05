@@ -8,7 +8,7 @@ const RANGE_CHECK_BOUND = 2 ** 128
 const PRIME = 2 ** 251 + 17 * 2 ** 192 + 1
 
 # The range for the amount of a trade should be in [-2**82, 2**82]
-const MAX_AMOUNT = 2 ** 82
+const MAX_AMOUNT = 2 ** 64
 
 # The max value used for range checks
 const MAX_BOUND = 2 ** 127
@@ -27,3 +27,6 @@ const SHARE_PRECISION = 10 ** 8
 
 # The precision for the liquidity
 const LIQUIDITY_PRECISION = 10 ** 6
+
+# The USDC address on Starknet
+const ADDRESS_USDC = 2368576823837625528275935341135881659748932889268308403712618244410713532584
