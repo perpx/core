@@ -8,10 +8,13 @@ libs_path = "lib"
 output = "./starknet-artifacts/protostar"
 
 ["protostar.contracts"]
-main = [
-    "./contracts/library/vault.cairo",
+exchange=[
+    "./contracts/perpx_v1_exchange.cairo",
 ]
-test = [
+exchange_test = [
+    "./contracts/test/perpx_v1_exchange_test.cairo",
+]
+vault_test = [
     "./contracts/test/vault_test.cairo",
 ]
 
