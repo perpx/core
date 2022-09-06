@@ -7,8 +7,11 @@ const RANGE_CHECK_BOUND = 2 ** 128
 # The prime is the range bound for felt on cairo
 const PRIME = 2 ** 251 + 17 * 2 ** 192 + 1
 
-# The range for the amount of a trade should be in [-2**82, 2**82]
+# The range for the amount of a trade should be in [-2**64, 2**64]
 const MAX_AMOUNT = 2 ** 64
+
+# The range for the amount of collateral should be in [-2**64, 2**64]
+const MAX_COLLATERAL = 2 ** 64
 
 # The max value used for range checks
 const MAX_BOUND = 2 ** 127
