@@ -9,6 +9,7 @@ from contracts.constants.perpx_constants import (
     RANGE_CHECK_BOUND,
     MAX_PRICE,
     MAX_AMOUNT,
+    MAX_COLLATERAL,
 )
 
 #
@@ -33,6 +34,8 @@ namespace TestContract:
     func add_liquidity_test(amount : felt, instrument : felt):
     end
     func remove_liquidity_test(amount : felt, instrument : felt):
+    end
+    func add_collateral_test(amount : felt):
     end
 end
 
@@ -61,6 +64,7 @@ func __setup__():
 
         context.erc_contract_address = prepared.contract_address
         context.contract_address = deploy_contract("./contracts/test/perpx_v1_exchange_test.cairo", [ids.OWNER, prepared.contract_address, ids.INSTRUMENT_COUNT]).contract_address
+        store(prepared.contract_address, "ERC20_balances", [ids.RANGE_CHECK_BOUND - 1, 0], key=[ids.ACCOUNT])
     %}
 
     return ()
@@ -80,19 +84,13 @@ func test_add_liquidity{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_
         ids.erc_address = context.erc_contract_address
         ids.address = context.contract_address
     %}
-    %{
-        if ids.amount > ids.RANGE_CHECK_BOUND:
-            expect_revert(error_message="ERC20: amount is not a valid Uint256")
-    %}
-    # Mint to account
-    ERC20TestContract.mint(
-        contract_address=erc_address, recipient=ACCOUNT, amount=Uint256(amount, 0)
-    )
 
     # prank the approval and the add liquidity calls
     %{
         erc_stop_prank_callable = start_prank(ids.ACCOUNT, target_contract_address=ids.erc_address)
         stop_prank_callable = start_prank(ids.ACCOUNT, target_contract_address=ids.address)
+        if ids.amount > ids.RANGE_CHECK_BOUND:
+            expect_revert(error_message="ERC20: amount is not a valid Uint256")
     %}
     ERC20TestContract.approve(
         contract_address=erc_address, spender=address, amount=Uint256(amount, 0)
@@ -112,7 +110,7 @@ func test_add_liquidity{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_
 
         assert user_stake[0] == ids.amount, f'user stake amount error, expected {ids.amount}, got {user_stake[0]}'
         assert user_stake[1] == ids.amount*100, f'user stake shares error, expected {ids.amount * 100}, got {user_stake[1]}'
-        assert account_balance == [0, 0], f'account balance error, expected [0, 0] got {account_balance}'
+        assert account_balance == [ids.RANGE_CHECK_BOUND-1-ids.amount, 0], f'account balance error, expected [{ids.RANGE_CHECK_BOUND-1-ids.amount}, 0] got {account_balance}'
         assert exchange_balance == [ids.amount, 0], f'exchange balance error, expected [{ids.amount}, 0] got {exchange_balance}'
     %}
 
@@ -133,19 +131,13 @@ func test_remove_liquidity{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, ran
         ids.erc_address = context.erc_contract_address
         ids.address = context.contract_address
     %}
-    %{
-        if ids.provide_amount > ids.RANGE_CHECK_BOUND:
-            expect_revert(error_message="ERC20: amount is not a valid Uint256")
-    %}
-    # Mint to account
-    ERC20TestContract.mint(
-        contract_address=erc_address, recipient=ACCOUNT, amount=Uint256(provide_amount, 0)
-    )
 
     # prank the approval and the add liquidity calls
     %{
         erc_stop_prank_callable = start_prank(ids.ACCOUNT, target_contract_address=ids.erc_address)
         stop_prank_callable = start_prank(ids.ACCOUNT, target_contract_address=ids.address)
+        if ids.provide_amount > ids.RANGE_CHECK_BOUND:
+            expect_revert(error_message="ERC20: amount is not a valid Uint256")
     %}
     ERC20TestContract.approve(
         contract_address=erc_address, spender=address, amount=Uint256(provide_amount, 0)
@@ -175,6 +167,49 @@ func test_remove_liquidity{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, ran
 
         assert user_stake[0] == diff, f'user stake amount error, expected {diff}, got {user_stake[0]}'
         assert user_stake[1] == shares, f'user stake shares error, expected {shares}, got {user_stake[1]}'
+    %}
+
+    return ()
+end
+
+@external
+func test_add_collateral{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+    amount : felt
+):
+    alloc_locals
+    local address
+    local erc_address
+    %{
+        ids.erc_address = context.erc_contract_address
+        ids.address = context.contract_address
+    %}
+
+    # prank the approval and the add liquidity calls
+    %{
+        erc_stop_prank_callable = start_prank(ids.ACCOUNT, target_contract_address=ids.erc_address)
+        stop_prank_callable = start_prank(ids.ACCOUNT, target_contract_address=ids.address)
+        if ids.amount > ids.RANGE_CHECK_BOUND:
+            expect_revert(error_message="ERC20: amount is not a valid Uint256")
+    %}
+    ERC20TestContract.approve(
+        contract_address=erc_address, spender=address, amount=Uint256(amount, 0)
+    )
+    %{
+        erc_stop_prank_callable()
+        if ids.amount < 1 or ids.amount > ids.MAX_COLLATERAL:
+            expect_revert(error_message="collateral increase limited to 2**64")
+    %}
+    TestContract.add_collateral_test(contract_address=address, amount=amount)
+
+    %{
+        stop_prank_callable() 
+        user_collateral = load(ids.address, "storage_collateral", "felt", key=[ids.ACCOUNT])
+        account_balance = load(ids.erc_address, "ERC20_balances", "Uint256", key=[ids.ACCOUNT])
+        exchange_balance = load(ids.erc_address, "ERC20_balances", "Uint256", key=[ids.address])
+
+        assert user_collateral[0] == ids.amount, f'user collateral error, expected {ids.amount}, got {user_collateral[0]}'
+        assert account_balance == [ids.RANGE_CHECK_BOUND-1-ids.amount, 0], f'account balance error, expected [{ids.RANGE_CHECK_BOUND-1-ids.amount}, 0] got {account_balance}'
+        assert exchange_balance == [ids.amount, 0], f'exchange balance error, expected [{ids.amount}, 0] got {exchange_balance}'
     %}
 
     return ()
