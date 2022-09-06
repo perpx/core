@@ -2,13 +2,13 @@
 
 from starkware.cairo.common.cairo_builtins import HashBuiltin
 from starkware.starknet.common.syscalls import get_caller_address, get_contract_address
-from starkware.cairo.common.math import assert_not_zero, unsigned_div_rem
+from starkware.cairo.common.math import unsigned_div_rem
 from starkware.cairo.common.uint256 import Uint256
 
 from contracts.library.position import Position
 from contracts.library.vault import Stake, Vault
 from contracts.utils.access_control import init_access_control, assert_only_owner
-from contracts.constants.perpx_constants import MAX_LIQUIDITY, ADDRESS_USDC
+from contracts.constants.perpx_constants import MAX_LIQUIDITY
 from contracts.perpx_v1_instrument import update_liquidity
 
 #
@@ -30,9 +30,9 @@ end
 #
 @contract_interface
 namespace IERC20:
-    func transfer(recipient : felt, amount : Uint256) -> (success : felt):
+    func transfer(recipient : felt, amount : Uint256):
     end
-    func transferFrom(sender : felt, recipient : felt, amount : Uint256) -> (success : felt):
+    func transfer_from(sender : felt, recipient : felt, amount : Uint256):
     end
 end
 
@@ -91,6 +91,10 @@ func storage_collateral_count() -> (count : felt):
 end
 
 @storage_var
+func storage_token() -> (address : felt):
+end
+
+@storage_var
 func storage_instrument_count() -> (instrument_count : felt):
 end
 
@@ -100,9 +104,10 @@ end
 
 @constructor
 func constructor{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
-    owner : felt, instrument_count : felt
+    owner : felt, token : felt, instrument_count : felt
 ):
     init_access_control(owner)
+    storage_token.write(token)
     storage_instrument_count.write(instrument_count)
     return ()
 end
@@ -163,11 +168,52 @@ end
 func add_liquidity{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
     amount : felt, instrument : felt
 ) -> ():
+    with_attr error_message("liquidity increase limited to 2**64"):
+        assert [range_check_ptr] = amount - 1
+        assert [range_check_ptr + 1] = MAX_LIQUIDITY - amount
+    end
+    let range_check_ptr = range_check_ptr + 2
+
     let (caller) = get_caller_address()
     let (exchange) = get_contract_address()
-    IERC20.transferFrom(
-        contract_address=instrument, sender=caller, recipient=exchange, amount=Uint256(amount, 0)
+    let (stake : Stake) = Vault.view_user_stake(caller, instrument)
+
+    with_attr error_message("liquidity limited to 2**64"):
+        assert [range_check_ptr] = amount + stake.amount
+        assert [range_check_ptr + 1] = MAX_LIQUIDITY - amount - stake.amount
+    end
+    let range_check_ptr = range_check_ptr + 2
+
+    let (token_address) = storage_token.read()
+    IERC20.transfer_from(
+        contract_address=token_address, sender=caller, recipient=exchange, amount=Uint256(amount, 0)
     )
+    update_liquidity(amount=amount, owner=caller, instrument=instrument)
+
+    return ()
+end
+
+# @notice Remove liquidity for the instrument
+# @param amount The change in liquidity
+# @param instrument The instrument to remove liquidity for
+@external
+func remove_liquidity{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+    amount : felt, instrument : felt
+) -> ():
+    alloc_locals
+    with_attr error_message("liquidity decrease limited to 2**64"):
+        assert [range_check_ptr] = amount - 1
+        assert [range_check_ptr + 1] = MAX_LIQUIDITY - amount
+    end
+    let range_check_ptr = range_check_ptr + 2
+
+    let (local caller) = get_caller_address()
+    update_liquidity(amount=-amount, owner=caller, instrument=instrument)
+
+    let (exchange) = get_contract_address()
+    let (token_address) = storage_token.read()
+    IERC20.transfer(contract_address=token_address, recipient=caller, amount=Uint256(amount, 0))
+
     return ()
 end
 
