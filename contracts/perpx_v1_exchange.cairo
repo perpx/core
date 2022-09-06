@@ -8,7 +8,7 @@ from starkware.cairo.common.uint256 import Uint256
 from contracts.library.position import Position
 from contracts.library.vault import Stake, Vault
 from contracts.utils.access_control import init_access_control, assert_only_owner
-from contracts.constants.perpx_constants import MAX_LIQUIDITY
+from contracts.constants.perpx_constants import MAX_LIQUIDITY, MAX_COLLATERAL
 from contracts.perpx_v1_instrument import update_liquidity
 
 #
@@ -73,7 +73,7 @@ func storage_oracles(instrument : felt) -> (price : felt):
 end
 
 @storage_var
-func storage_collateral(owner : felt, instrument : felt) -> (amount : felt):
+func storage_collateral(owner : felt) -> (amount : felt):
 end
 
 @storage_var
@@ -159,6 +159,52 @@ func liquidate{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr
     # let (_delta) = liquidate_position(address=owner, price=_price, fee_bps=_fee)
     # Liquidate.emit(owner=owner, price=_price, fee=_fee, delta=_delta)
     return (delta=0)
+end
+
+# @notice Add collateral for the owner
+# @param amount The change in collateral
+@external
+func add_collateral{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+    amount : felt
+):
+    with_attr error_message("collateral increase limited to 2**64"):
+        assert [range_check_ptr] = amount - 1
+        assert [range_check_ptr + 1] = MAX_COLLATERAL - amount
+    end
+    let range_check_ptr = range_check_ptr + 2
+
+    let (caller) = get_caller_address()
+    let (exchange) = get_contract_address()
+    let (collateral) = storage_collateral.read(caller)
+
+    with_attr error_message("collateral limited to 2**64"):
+        assert [range_check_ptr] = amount + collateral
+        assert [range_check_ptr + 1] = MAX_COLLATERAL - amount - collateral
+    end
+    let range_check_ptr = range_check_ptr + 2
+
+    let (token_address) = storage_token.read()
+
+    IERC20.transfer_from(
+        contract_address=token_address, sender=caller, recipient=exchange, amount=Uint256(amount, 0)
+    )
+
+    storage_collateral.write(caller, amount + collateral)
+    return ()
+end
+
+# @notice Remove collateral for the owner
+# @param amount The change in collateral
+@external
+func remove_collateral{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+    amount : felt
+):
+    with_attr error_message("collateral decrease limited to 2**64"):
+        assert [range_check_ptr] = amount - 1
+        assert [range_check_ptr + 1] = MAX_LIQUIDITY - amount
+    end
+    let range_check_ptr = range_check_ptr + 2
+    return ()
 end
 
 # @notice Add liquidity for the instrument
