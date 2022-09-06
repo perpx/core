@@ -34,6 +34,11 @@ namespace IPerpxV1Exchange:
     # @param instrument The instrument to add liquidity for
     func add_liquidity(amount : felt, instrument : felt) -> ():
     end
+    # @notice Remove liquidity for the instrument
+    # @param amount The change in liquidity
+    # @param instrument The instrument to remove liquidity for
+    func remove_liquidity(amount : felt, instrument : felt) -> ():
+    end
     # @notice Add collateral for the owner
     # @param amount The change in collateral
     func add_collateral(amount : felt) -> ():
