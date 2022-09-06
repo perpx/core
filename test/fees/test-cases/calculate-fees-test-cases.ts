@@ -11,15 +11,19 @@ const MAX_LIQUIDITY = 2**122
 // 4. short: max_amount * max_price or 0
 // 5. liquidity: max_liquidity or min_liquidity
 
+interface CalculateFeesInterface {
+    description: string,
+    price: bigint,
+    amount: bigint,
+    long: bigint,
+    short: bigint,
+    liquidity: bigint,
+    error?: string,
+}
+
 function random_inside_limit(array: Array<bigint>): Array<bigint> {
     let a: bigint = BigInt(Math.floor(Number(array[0])+Math.random()*Number(array[1])+1))
     let b: bigint = BigInt(Math.floor(Number(array[1])-Math.random()*Number(array[1])+1))
-    return [a,b]
-}
-
-function random_outside_limit(array: Array<bigint>): Array<bigint> {
-    let a: bigint = BigInt(Math.floor(Number(array[0])-Math.random()*Number(array[1])+1))
-    let b: bigint = BigInt(Math.floor(Number(array[1])+Math.random()*Number(array[1])+1))
     return [a,b]
 }
 
@@ -29,6 +33,7 @@ function non_random_outside_limit(array: Array<bigint>): Array<bigint> {
     return [a,b]
 }
 
+// LIMIT SCENARIOS
 const limit_prices = [BigInt(1), (BigInt(MAX_PRICE) - BigInt(1))]
 const limit_amounts = [-BigInt(MAX_AMOUNT), BigInt(MAX_AMOUNT)]
 const limit_liquidities = [BigInt(MIN_LIQUIDITY), (BigInt(MAX_LIQUIDITY) - BigInt(1))]
@@ -57,24 +62,12 @@ for (const price of limit_prices) {
     }
 }
 
-// const base_prices = [BigInt(Math.random()*MAX_PRICE), (BigInt(MAX_PRICE) - BigInt(1))]
-// const base_amounts = [-BigInt(MAX_AMOUNT), BigInt(MAX_AMOUNT)]
-// const base_liquidities = [BigInt(MIN_LIQUIDITY), (BigInt(MAX_LIQUIDITY) - BigInt(1))]
-// const base_longs = [BigInt(0), ((BigInt(MAX_PRICE)-BigInt(1)) * (BigInt(MAX_AMOUNT)-BigInt(1)))]
-// const base_shorts = [BigInt(0), ((BigInt(MAX_PRICE)-BigInt(1)) * (BigInt(MAX_AMOUNT)-BigInt(1)))]
-
+// BASE SCENARIOS
 const base_prices = random_inside_limit(limit_prices)
 const base_amounts = random_inside_limit(limit_amounts)
 const base_liquidities =random_inside_limit(limit_liquidities)
 const base_longs =random_inside_limit(limit_longs)
 const base_shorts =random_inside_limit(limit_shorts)
-
-
-// console.log(base_prices)
-// console.log(base_amounts)
-// console.log(base_liquidities)
-// console.log(base_longs)
-// console.log(base_shorts)
 
 export const CALCULATE_FEES_TEST_CASES_BASE_AUTOMATED: CalculateFeesInterface[] = []
 
@@ -98,17 +91,12 @@ for (const price of base_prices) {
     }
 }
 
+// FAIL SCENARIOS
 const fail_prices = non_random_outside_limit(limit_prices)
 const fail_amounts = non_random_outside_limit(limit_amounts)
 const fail_liquidities =non_random_outside_limit(limit_liquidities)
 const fail_longs =non_random_outside_limit(limit_longs)
 const fail_shorts =non_random_outside_limit(limit_shorts)
-
-// console.log(fail_prices)
-// console.log(fail_amounts)
-// console.log(fail_liquidities)
-// console.log(fail_longs)
-// console.log(fail_shorts)
 
 export const CALCULATE_FEES_TEST_CASES_FAIL_AUTOMATED: CalculateFeesInterface[] = []
 
@@ -133,16 +121,6 @@ for (const price of fail_prices) {
     }
 }
 
-
-interface CalculateFeesInterface {
-    description: string,
-    price: bigint,
-    amount: bigint,
-    long: bigint,
-    short: bigint,
-    liquidity: bigint,
-    error?: string,
-}
 
 export const CALCULATE_FEES_TEST_CASES_BASE: CalculateFeesInterface[] = [
     {
@@ -246,13 +224,4 @@ export const CALCULATE_FEES_TEST_CASES_FAIL: CalculateFeesInterface[] = [
         liquidity: BigInt(0),
         error: "AssertionError: div=0x0 is out of the valid range.",
     },
-    //{
-        //description: "price 0, amount 0, long 0, short 0, liquidity 10000000",
-        //price: BigInt(0),
-        //amount: BigInt(0),
-        //long: BigInt(0),
-        //short: BigInt(0),
-        //liquidity: BigInt(0),
-        //error: "AssertionError: div=0x0 is out of the valid range."
-    //},
 ]
