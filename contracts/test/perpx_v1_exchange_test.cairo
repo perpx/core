@@ -4,6 +4,7 @@ from contracts.perpx_v1_exchange import (
     update_prices,
     get_price,
     calculate_pnl,
+    calculate_fees,
     add_liquidity,
     remove_liquidity,
 )
@@ -51,6 +52,14 @@ func calculate_pnl_test{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_
 ) -> (pnl : felt):
     let (pnl) = calculate_pnl(owner=owner, instruments=instruments, mult=1)
     return (pnl=pnl)
+end
+
+@external
+func calculate_fees_test{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+    owner : felt, instruments : felt
+) -> (fees : felt):
+    let (fees) = calculate_fees(owner=owner, instruments=instruments, mult=1)
+    return (fees=fees)
 end
 
 @external

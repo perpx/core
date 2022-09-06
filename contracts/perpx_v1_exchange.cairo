@@ -331,7 +331,6 @@ end
 # @param owner The owner of the positions
 # @param instruments The instruments traded by owner
 # @param mult The multiplication factor
-# @param pnl The pnl of the owner
 # @return pnl The pnl of the owner
 func calculate_pnl{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
     owner : felt, instruments : felt, mult : felt
@@ -350,4 +349,27 @@ func calculate_pnl{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check
     end
     let (p) = calculate_pnl(owner=owner, instruments=q, mult=mult * 2)
     return (pnl=p)
+end
+
+# @notice Calculates the owner fees
+# @dev Internal function
+# @param owner The owner of the positions
+# @param instruments The instruments traded by owner
+# @return fees The fees of the owner
+func calculate_fees{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+    owner : felt, instruments : felt, mult : felt
+) -> (fees : felt):
+    alloc_locals
+    if instruments == 0:
+        return (fees=0)
+    end
+    let (q, r) = unsigned_div_rem(instruments, 2)
+    if r == 1:
+        let (info) = Position.position(owner, mult)
+        let new_fees = info.fees
+        let (f) = calculate_fees(owner=owner, instruments=q, mult=mult * 2)
+        return (fees=f + new_fees)
+    end
+    let (f) = calculate_fees(owner=owner, instruments=q, mult=mult * 2)
+    return (fees=f)
 end
