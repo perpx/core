@@ -1,6 +1,12 @@
 %lang starknet
 
-from contracts.perpx_v1_exchange import update_prices, get_price, calculate_pnl, add_liquidity
+from contracts.perpx_v1_exchange import (
+    update_prices,
+    get_price,
+    calculate_pnl,
+    add_liquidity,
+    remove_liquidity,
+)
 from starkware.cairo.common.cairo_builtins import HashBuiltin
 
 from contracts.library.position import Position
@@ -51,5 +57,14 @@ end
 func add_liquidity_test{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
     amount : felt, instrument : felt
 ):
+    add_liquidity(amount=amount, instrument=instrument)
+    return ()
+end
+
+@external
+func remove_liquidity_test{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+    amount : felt, instrument : felt
+):
+    remove_liquidity(amount=amount, instrument=instrument)
     return ()
 end
