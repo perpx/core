@@ -7,6 +7,7 @@ from contracts.perpx_v1_exchange import (
     calculate_fees,
     add_liquidity,
     remove_liquidity,
+    add_collateral,
 )
 from starkware.cairo.common.cairo_builtins import HashBuiltin
 
@@ -75,5 +76,13 @@ func remove_liquidity_test{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, ran
     amount : felt, instrument : felt
 ):
     remove_liquidity(amount=amount, instrument=instrument)
+    return ()
+end
+
+@external
+func add_collateral_test{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+    amount : felt
+):
+    add_collateral(amount=amount)
     return ()
 end
