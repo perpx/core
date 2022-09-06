@@ -7,10 +7,7 @@ import {
 import { expect } from 'chai'
 import { starknet } from 'hardhat'
 import { DeployOptions } from '@shardlabs/starknet-hardhat-plugin/dist/src/types'
-import {
-    getOneBits,
-    generateNBitsWord,
-} from '../utils/exchange.utils'
+import { getOneBits, generateNBitsWord } from '../utils/exchange.utils'
 
 let deployer: StarknetContract
 let contract: StarknetContract
@@ -46,7 +43,7 @@ describe('PerpxV1Exchange', () => {
 
         // call deploy_contract from deployer
         const args: StringMap = {
-            args: [INSTRUMENTS_AMOUNT],
+            args: [1234, INSTRUMENTS_AMOUNT],
             class_hash: classHash,
             has_owner: 1,
         }

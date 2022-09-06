@@ -22,9 +22,9 @@ end
 # Functions
 #
 
-# @notice Returns the notional amount of longs for the instrument
+# @notice Returns the amount of longs for the instrument
 # @param instrument The instrument's id
-# @return amount The notional amount of longs for the instrument
+# @return amount The amount of longs for the instrument
 func longs{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
     instrument : felt
 ) -> (amount : felt):
@@ -32,9 +32,9 @@ func longs{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
     return (amount=amount)
 end
 
-# @notice Returns the notional amount of shorts for the instrument
+# @notice Returns the amount of shorts for the instrument
 # @param instrument The instrument's id
-# @return amount The notional amount of shorts for the instrument
+# @return amount The amount of shorts for the instrument
 func shorts{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
     instrument : felt
 ) -> (amount : felt):
@@ -42,7 +42,7 @@ func shorts{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
     return (amount=amount)
 end
 
-# @notice Update long or short notional amount
+# @notice Update long or short amount
 # @dev Internal functions
 # @param amount The amount of liquidity (precision: 6)
 # @param price The price of the instrument

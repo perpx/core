@@ -108,10 +108,6 @@ namespace Vault:
     ) -> ():
         let (user_stake) = storage_user_stake.read(owner, instrument)
 
-        with_attr error_message("null amount"):
-            assert_nn(amount - 1)
-        end
-
         let new_amount = user_stake.amount - amount
         with_attr error_message("insufficient balance"):
             assert_nn(new_amount)
