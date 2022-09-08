@@ -27,3 +27,6 @@ const SHARE_PRECISION = 10 ** 8
 
 # The precision for the liquidity
 const LIQUIDITY_PRECISION = 10 ** 6
+
+# The precision for the volatility fees
+const VOLATILITY_FEE_RATE_PRECISION = 10 ** 4
