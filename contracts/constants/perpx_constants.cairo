@@ -22,7 +22,7 @@ const MAX_DIV = 2 ** 123
 # The wad precision value
 const WAD_PRECISION = 10 ** 18
 
-# The maximum liquidity value [0, 10**18)
+# The maximum liquidity value [0, 2**64)
 const MAX_LIQUIDITY = 2 ** 64
 
 # The precision needed for the share calculation
