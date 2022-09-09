@@ -39,7 +39,10 @@ end
 func __setup__():
     alloc_locals
     local address
-    %{ context.contract_address = deploy_contract("./contracts/test/perpx_v1_exchange_test.cairo", [ids.OWNER, 1234, ids.INSTRUMENT_COUNT]).contract_address %}
+    %{
+        context.contract_address = deploy_contract("./contracts/test/perpx_v1_exchange_test.cairo", [ids.OWNER, 1234, ids.INSTRUMENT_COUNT]).contract_address 
+        store(context.contract_address, "storage_msb_instrument", [2**(ids.INSTRUMENT_COUNT - 1)])
+    %}
 
     return ()
 end
@@ -82,7 +85,7 @@ func test_update_prices_revert{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*,
 end
 
 @external
-func test_update_prices_test{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+func test_update_prices{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
     random : felt
 ):
     alloc_locals
@@ -100,6 +103,12 @@ func test_update_prices_test{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, r
             instruments |= 1 << bit
         ids.length = length
         ids.instruments = instruments
+
+        last_prices = []
+        for i in range(ids.INSTRUMENT_COUNT):
+            price = randint(0, ids.MAX_PRICE)
+            last_prices.append(price)
+            store(context.contract_address, "storage_oracles", [price], key=[2**i])
 
         ids.address = context.contract_address
     %}
@@ -121,6 +130,10 @@ func test_update_prices_test{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, r
             instruments >>= 1
         for (i, p) in enumerate(prices):
             assert p == memory[ids.arr + i], f'instrument price error got {p}, expected {memory[ids.arr + i]}'
+
+        for i in range(ids.INSTRUMENT_COUNT):
+            price = load(ids.address, "storage_prev_oracles", "felt", key=[2**i])[0]
+            assert last_prices[i] == price, f'last price error, expected {last_prices[i]}, got {price}'
     %}
     return ()
 end
