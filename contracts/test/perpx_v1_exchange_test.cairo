@@ -3,8 +3,8 @@
 from contracts.perpx_v1_exchange import (
     update_prices,
     get_price,
-    calculate_pnl,
-    calculate_fees,
+    _calculate_pnl,
+    _calculate_fees,
     add_liquidity,
     remove_liquidity,
     add_collateral,
@@ -31,19 +31,19 @@ end
 
 @external
 func update_position_test{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
-    address : felt, instrument : felt, price : felt, amount : felt, fee_bps : felt
+    address : felt, instrument : felt, price : felt, amount : felt, fees : felt
 ) -> ():
     Position.update_position(
-        address=address, instrument=instrument, price=price, amount=amount, fee_bps=fee_bps
+        owner=address, instrument=instrument, price=price, amount=amount, fees=fees
     )
     return ()
 end
 
 @external
 func close_position_test{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
-    owner : felt, instrument : felt, price : felt, fee_bps : felt
+    owner : felt, instrument : felt, price : felt, fees : felt
 ) -> ():
-    Position.close_position(address=owner, instrument=instrument, price=price, fee_bps=fee_bps)
+    Position.close_position(owner=owner, instrument=instrument, price=price, fees=fees)
     return ()
 end
 
@@ -51,7 +51,7 @@ end
 func calculate_pnl_test{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
     owner : felt, instruments : felt
 ) -> (pnl : felt):
-    let (pnl) = calculate_pnl(owner=owner, instruments=instruments, mult=1)
+    let (pnl) = _calculate_pnl(owner=owner, instruments=instruments, mult=1)
     return (pnl=pnl)
 end
 
@@ -59,7 +59,7 @@ end
 func calculate_fees_test{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
     owner : felt, instruments : felt
 ) -> (fees : felt):
-    let (fees) = calculate_fees(owner=owner, instruments=instruments, mult=1)
+    let (fees) = _calculate_fees(owner=owner, instruments=instruments, mult=1)
     return (fees=fees)
 end
 
