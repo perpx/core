@@ -18,25 +18,25 @@ end
 
 @external
 func get_position_test{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
-    address : felt, instrument : felt
+    owner : felt, instrument : felt
 ) -> (position : Info):
-    let (_position) = Position.position(address, instrument)
+    let (_position) = Position.position(owner, instrument)
     return (position=_position)
 end
 
 @external
 func update_test{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
-    address : felt, instrument : felt, price : felt, amount : felt, fee_bps : felt
+    owner : felt, instrument : felt, price : felt, amount : felt, fees : felt
 ) -> ():
-    Position.update_position(address, instrument, price, amount, fee_bps)
+    Position.update_position(owner, instrument, price, amount, fees)
     return ()
 end
 
 @external
 func close_test{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
-    address : felt, instrument : felt, price : felt, fee_bps : felt
+    owner : felt, instrument : felt, price : felt, fees : felt
 ) -> ():
-    let (delt) = Position.close_position(address, instrument, price, fee_bps)
+    let (delt) = Position.close_position(owner, instrument, price, fees)
     delta.write(delt)
     return ()
 end
