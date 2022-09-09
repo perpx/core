@@ -73,12 +73,21 @@ func storage_oracles(instrument : felt) -> (price : felt):
 end
 
 @storage_var
+func storage_prev_oracles(instrument : felt) -> (price : felt):
+end
+
+@storage_var
+func storage_margin(instrument : felt) -> (margin_ratio : felt):
+end
+
+@storage_var
 func storage_collateral(owner : felt) -> (amount : felt):
 end
 
 @storage_var
 func storage_trades_queue(index : felt) -> (trade : BatchedTrade):
 end
+
 @storage_var
 func storage_trades_count() -> (count : felt):
 end
@@ -86,6 +95,7 @@ end
 @storage_var
 func storage_collateral_queue(index : felt) -> (collateral : BatchedCollateral):
 end
+
 @storage_var
 func storage_collateral_count() -> (count : felt):
 end
@@ -102,6 +112,10 @@ end
 # Constructor
 #
 
+# @notice Exchange constructor
+# @param owner The contract owner
+# @param token The collateral token address
+# @param instrument_count The number of instruments
 @constructor
 func constructor{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
     owner : felt, token : felt, instrument_count : felt
@@ -128,7 +142,7 @@ func trade{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
     # TODO calculate owner pnl to check if he can trade this amount (must be X % over collateral)
     let (local owner) = get_caller_address()
     let (instruments) = storage_user_instruments.read(owner)
-    let (pnl) = calculate_pnl(owner=owner, instruments=instruments, mult=1)
+    let (pnl) = _calculate_pnl(owner=owner, instruments=instruments, mult=1)
     # TODO batch the trade
     let (price) = storage_oracles.read(instrument)
     # TODO change the fee
@@ -321,28 +335,9 @@ func update_prices{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check
     prices_len : felt, prices : felt*, instruments : felt
 ) -> ():
     assert_only_owner()
-    verify_length(length=prices_len, instruments=instruments)
-    _update_prices(prices_len=prices_len, prices=prices, mult=1, instruments=instruments)
-    return ()
-end
-
-# @notice Verify the length of the array matches the number of instruments updated
-# @param length The length of the array
-# @param instruments The instruments updated
-func verify_length{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
-    length : felt, instruments : felt
-) -> ():
-    alloc_locals
-    if instruments == 0:
-        assert length = 0
-        return ()
-    end
-    let (q, r) = unsigned_div_rem(instruments, 2)
-    if r == 1:
-        verify_length(length=length - 1, instruments=q)
-    else:
-        verify_length(length=length, instruments=q)
-    end
+    _update_prices(
+        prices_len=prices_len, prices=prices, mult=1, instrument=1, instruments=instruments
+    )
     return ()
 end
 
@@ -350,20 +345,38 @@ end
 # @param prices_len Number of prices to update
 # @param prices The price updates
 # @param mult The multiplication factor
+# @param instrument The current instrument
 # @param instruments The instruments to update
 func _update_prices{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
-    prices_len : felt, prices : felt*, mult : felt, instruments : felt
+    prices_len : felt, prices : felt*, mult : felt, instrument : felt, instruments : felt
 ) -> ():
     alloc_locals
-    if instruments == 0:
+    let (count) = storage_instrument_count.read()
+    if instrument == count + 1:
+        assert prices_len = 0
         return ()
     end
+    let (prev_price) = storage_oracles.read(mult)
+    storage_prev_oracles.write(mult, prev_price)
+
     let (q, r) = unsigned_div_rem(instruments, 2)
     if r == 1:
         storage_oracles.write(mult, [prices])
-        _update_prices(prices_len=prices_len - 1, prices=prices + 1, mult=mult * 2, instruments=q)
+        _update_prices(
+            prices_len=prices_len - 1,
+            prices=prices + 1,
+            mult=mult * 2,
+            instrument=instrument + 1,
+            instruments=q,
+        )
     else:
-        _update_prices(prices_len=prices_len, prices=prices, mult=mult * 2, instruments=q)
+        _update_prices(
+            prices_len=prices_len,
+            prices=prices,
+            mult=mult * 2,
+            instrument=instrument + 1,
+            instruments=q,
+        )
     end
     return ()
 end
@@ -378,7 +391,7 @@ end
 # @param instruments The instruments traded by owner
 # @param mult The multiplication factor
 # @return pnl The pnl of the owner
-func calculate_pnl{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+func _calculate_pnl{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
     owner : felt, instruments : felt, mult : felt
 ) -> (pnl : felt):
     alloc_locals
@@ -390,10 +403,10 @@ func calculate_pnl{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check
         let (price) = storage_oracles.read(mult)
         let (info) = Position.position(owner, mult)
         let new_pnl = price * info.size - info.cost
-        let (p) = calculate_pnl(owner=owner, instruments=q, mult=mult * 2)
+        let (p) = _calculate_pnl(owner=owner, instruments=q, mult=mult * 2)
         return (pnl=p + new_pnl)
     end
-    let (p) = calculate_pnl(owner=owner, instruments=q, mult=mult * 2)
+    let (p) = _calculate_pnl(owner=owner, instruments=q, mult=mult * 2)
     return (pnl=p)
 end
 
@@ -402,7 +415,7 @@ end
 # @param owner The owner of the positions
 # @param instruments The instruments traded by owner
 # @return fees The fees of the owner
-func calculate_fees{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+func _calculate_fees{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
     owner : felt, instruments : felt, mult : felt
 ) -> (fees : felt):
     alloc_locals
@@ -413,9 +426,9 @@ func calculate_fees{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_chec
     if r == 1:
         let (info) = Position.position(owner, mult)
         let new_fees = info.fees
-        let (f) = calculate_fees(owner=owner, instruments=q, mult=mult * 2)
+        let (f) = _calculate_fees(owner=owner, instruments=q, mult=mult * 2)
         return (fees=f + new_fees)
     end
-    let (f) = calculate_fees(owner=owner, instruments=q, mult=mult * 2)
+    let (f) = _calculate_fees(owner=owner, instruments=q, mult=mult * 2)
     return (fees=f)
 end
