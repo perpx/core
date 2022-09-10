@@ -2,7 +2,7 @@
 
 from starkware.cairo.common.cairo_builtins import HashBuiltin
 from contracts.library.vault import Vault, Stake
-from contracts.test.vault_test import provide_liquidity_test, view_shares, view_user_stake
+# from contracts.test.vault_test import provide_liquidity_test, view_shares, view_user_stake
 
 #
 # Constants
