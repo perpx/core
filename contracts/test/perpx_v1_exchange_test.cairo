@@ -1,16 +1,19 @@
 %lang starknet
 
+from starkware.cairo.common.cairo_builtins import HashBuiltin
+
 from contracts.perpx_v1_exchange import (
     update_prices,
+    update_margin_parameters,
     get_price,
-    _calculate_pnl,
-    _calculate_fees,
     add_liquidity,
     remove_liquidity,
     add_collateral,
+    _calculate_pnl,
+    _calculate_fees,
+    _verify_length,
+    Parameter,
 )
-from starkware.cairo.common.cairo_builtins import HashBuiltin
-
 from contracts.library.position import Position
 
 @view
@@ -30,6 +33,16 @@ func update_prices_test{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_
 end
 
 @external
+func update_margin_parameters_test{
+    syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr
+}(parameters_len : felt, parameters : Parameter*, instruments : felt):
+    update_margin_parameters(
+        parameters_len=parameters_len, parameters=parameters, instruments=instruments
+    )
+    return ()
+end
+
+@external
 func update_position_test{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
     address : felt, instrument : felt, price : felt, amount : felt, fees : felt
 ) -> ():
@@ -45,22 +58,6 @@ func close_position_test{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range
 ) -> ():
     Position.close_position(owner=owner, instrument=instrument, price=price, fees=fees)
     return ()
-end
-
-@external
-func calculate_pnl_test{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
-    owner : felt, instruments : felt
-) -> (pnl : felt):
-    let (pnl) = _calculate_pnl(owner=owner, instruments=instruments, mult=1)
-    return (pnl=pnl)
-end
-
-@external
-func calculate_fees_test{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
-    owner : felt, instruments : felt
-) -> (fees : felt):
-    let (fees) = _calculate_fees(owner=owner, instruments=instruments, mult=1)
-    return (fees=fees)
 end
 
 @external
@@ -84,5 +81,29 @@ func add_collateral_test{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range
     amount : felt
 ):
     add_collateral(amount=amount)
+    return ()
+end
+
+@external
+func calculate_pnl_test{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+    owner : felt, instruments : felt
+) -> (pnl : felt):
+    let (pnl) = _calculate_pnl(owner=owner, instruments=instruments, mult=1)
+    return (pnl=pnl)
+end
+
+@external
+func calculate_fees_test{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+    owner : felt, instruments : felt
+) -> (fees : felt):
+    let (fees) = _calculate_fees(owner=owner, instruments=instruments, mult=1)
+    return (fees=fees)
+end
+
+@external
+func verify_length_test{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+    length : felt, instruments : felt
+):
+    _verify_length(length=length, instruments=instruments)
     return ()
 end

@@ -10,6 +10,7 @@ from contracts.constants.perpx_constants import (
     MAX_PRICE,
     MAX_AMOUNT,
 )
+from contracts.perpx_v1_exchange import Parameter
 
 #
 # Constants
@@ -18,6 +19,7 @@ from contracts.constants.perpx_constants import (
 const PRIME = 2 ** 251 + 17 * 2 ** 192 + 1
 const OWNER = 12345
 const INSTRUMENT_COUNT = 10
+const MATH_PRECISION = 2 ** 64 + 2 ** 61
 
 #
 # Interface
@@ -28,6 +30,12 @@ namespace TestContract:
     func view_price_test(instrument : felt) -> ():
     end
     func update_prices_test(prices_len : felt, prices : felt*, instruments : felt):
+    end
+    func update_margin_parameters_test(
+        parameters_len : felt, parameters : Parameter*, instruments : felt
+    ):
+    end
+    func verify_length_test(length : felt, instruments : felt):
     end
 end
 
@@ -48,7 +56,7 @@ func __setup__():
 end
 
 @external
-func test_update_prices_revert{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+func test_verify_length{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
     random : felt
 ):
     alloc_locals
@@ -77,19 +85,18 @@ func test_update_prices_revert{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*,
         stop_prank_callable = start_prank(ids.OWNER, target_contract_address=context.contract_address) 
         expect_revert()
     %}
-    TestContract.update_prices_test(
-        contract_address=address, prices_len=length, prices=arr, instruments=instruments
+    TestContract.verify_length_test(
+        contract_address=address, length=length, instruments=instruments
     )
     %{ stop_prank_callable() %}
     return ()
 end
 
 @external
-func test_update_prices{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
-    random : felt
-):
+func test_updates{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(random : felt):
     alloc_locals
-    let (local arr) = alloc()
+    let (local arr_prices) = alloc()
+    let (local arr_parameters : Parameter*) = alloc()
     local instruments
     local address
     local length
@@ -97,7 +104,9 @@ func test_update_prices{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_
         from random import randint, sample
         length = ids.random % ids.INSTRUMENT_COUNT
         for i in range(length):
-            memory[ids.arr + i] = randint(0, ids.MAX_PRICE)
+            memory[ids.arr_prices + i] = randint(0, ids.MAX_PRICE)
+            memory[ids.arr_parameters._reference_value + 2*i] = randint(0, ids.MATH_PRECISION)
+            memory[ids.arr_parameters._reference_value + 2*i + 1] = randint(0, ids.MATH_PRECISION)
         instruments = 0
         for bit in sample(range(ids.INSTRUMENT_COUNT), length):
             instruments |= 1 << bit
@@ -114,22 +123,33 @@ func test_update_prices{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_
     %}
     %{ stop_prank_callable = start_prank(ids.OWNER, target_contract_address=context.contract_address) %}
     TestContract.update_prices_test(
-        contract_address=address, prices_len=length, prices=arr, instruments=instruments
+        contract_address=address, prices_len=length, prices=arr_prices, instruments=instruments
+    )
+    TestContract.update_margin_parameters_test(
+        contract_address=address,
+        parameters_len=length,
+        parameters=arr_parameters,
+        instruments=instruments,
     )
     %{
         stop_prank_callable() 
         instruments = ids.instruments
         mult = 1
         prices = []
+        parameters = []
         while instruments != 0:
             lsb = instruments & 1
             if lsb != 0:
                 price = load(ids.address, "storage_oracles", "felt", key=[mult])[0]
+                parameter = load(ids.address, "storage_margin_parameters", "Parameter", key=[mult])
                 prices.append(price)
+                parameters.append(parameter)
             mult *= 2
             instruments >>= 1
-        for (i, p) in enumerate(prices):
-            assert p == memory[ids.arr + i], f'instrument price error got {p}, expected {memory[ids.arr + i]}'
+        for (i, (price, parameter)) in enumerate(zip(prices, parameters)):
+            assert price == memory[ids.arr_prices + i], f'instrument price error got {price}, expected {memory[ids.arr_prices + i]}'
+            assert parameter[0] == memory[ids.arr_parameters._reference_value + 2*i], f'instrument parameter error got {parameter[0]}, expected {memory[ids.arr_parameters._reference_value + 2*i]}'
+            assert parameter[1] == memory[ids.arr_parameters._reference_value + 2*i +1], f'instrument parameter error got {parameter[1]}, expected {memory[ids.arr_parameters._reference_value + 2*i + 1]}'
 
         for i in range(ids.INSTRUMENT_COUNT):
             price = load(ids.address, "storage_prev_oracles", "felt", key=[2**i])[0]
