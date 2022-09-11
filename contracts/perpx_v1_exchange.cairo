@@ -25,6 +25,11 @@ struct BatchedCollateral:
     member amount : felt
 end
 
+struct Parameter:
+    member k : felt
+    member lambda : felt
+end
+
 #
 # Interfaces
 #
@@ -77,7 +82,11 @@ func storage_prev_oracles(instrument : felt) -> (price : felt):
 end
 
 @storage_var
-func storage_margin(instrument : felt) -> (margin_ratio : felt):
+func storage_volatility(instrument : felt) -> (volatility : felt):
+end
+
+@storage_var
+func storage_margin_parameters(instrument : felt) -> (param : Parameter):
 end
 
 @storage_var
@@ -335,8 +344,26 @@ func update_prices{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check
     prices_len : felt, prices : felt*, instruments : felt
 ) -> ():
     assert_only_owner()
+    _verify_length(length=prices_len, instruments=instruments)
     _update_prices(
-        prices_len=prices_len, prices=prices, mult=1, instrument=1, instruments=instruments
+        prices_len=prices_len, prices=prices, mult=1, instrument=0, instruments=instruments
+    )
+    return ()
+end
+
+# @notice Update the margin parameters
+# @param parameters_len The number of parameters to update
+# @param parameters The parameters to update
+# @param instruments The instruments to update
+# @dev If the list of instruments is [A, B, C, D, E, F, G] and margin update
+# @dev apply to [A, E, G], instruments = 2^0 + 2^4 + 2^6
+func update_margin_parameters{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+    parameters_len : felt, parameters : Parameter*, instruments : felt
+) -> ():
+    assert_only_owner()
+    _verify_length(length=parameters_len, instruments=instruments)
+    _update_margin_parameters(
+        parameters_len=parameters_len, parameters=parameters, mult=1, instruments=instruments
     )
     return ()
 end
@@ -378,6 +405,43 @@ func _update_prices{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_chec
             instruments=q,
         )
     end
+    return ()
+end
+
+# @notice Update the margin parameters
+# @param parameters_len The number of parameters to update
+# @param parameters The parameters to update
+# @param instruments The instruments to update
+# @param mult The multiplication factor
+# @param instruments The instruments to update
+func _update_margin_parameters{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+    parameters_len : felt, parameters : Parameter*, mult : felt, instruments : felt
+) -> ():
+    alloc_locals
+    if instruments == 0:
+        return ()
+    end
+
+    let (q, r) = unsigned_div_rem(instruments, 2)
+    if r == 1:
+        storage_margin_parameters.write(mult, [parameters])
+        _update_margin_parameters(
+            parameters_len=parameters_len - 1,
+            parameters=parameters + 2,
+            mult=mult * 2,
+            instruments=q,
+        )
+    else:
+        _update_margin_parameters(
+            parameters_len=parameters_len, parameters=parameters, mult=mult * 2, instruments=q
+        )
+    end
+    return ()
+end
+
+func _update_volatility{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+    instrument : felt
+) -> ():
     return ()
 end
 
@@ -431,4 +495,24 @@ func _calculate_fees{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_che
     end
     let (f) = _calculate_fees(owner=owner, instruments=q, mult=mult * 2)
     return (fees=f)
+end
+
+# @notice Verify the length of the array matches the number of instruments updated
+# @param length The length of the array
+# @param instruments The instruments updated
+func _verify_length{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+    length : felt, instruments : felt
+) -> ():
+    alloc_locals
+    if instruments == 0:
+        assert length = 0
+        return ()
+    end
+    let (q, r) = unsigned_div_rem(instruments, 2)
+    if r == 1:
+        _verify_length(length=length - 1, instruments=q)
+    else:
+        _verify_length(length=length, instruments=q)
+    end
+    return ()
 end
