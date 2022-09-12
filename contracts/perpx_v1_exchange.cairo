@@ -5,10 +5,11 @@ from starkware.starknet.common.syscalls import get_caller_address, get_contract_
 from starkware.cairo.common.math import unsigned_div_rem
 from starkware.cairo.common.uint256 import Uint256
 
+from lib.cairo_math_64x61.contracts.cairo_math_64x61.math64x61 import Math64x61
 from contracts.library.position import Position
 from contracts.library.vault import Stake, Vault
 from contracts.utils.access_control import init_access_control, assert_only_owner
-from contracts.constants.perpx_constants import MAX_LIQUIDITY, MAX_COLLATERAL
+from contracts.constants.perpx_constants import MAX_LIQUIDITY, MAX_COLLATERAL, LIQUIDITY_PRECISION
 from contracts.perpx_v1_instrument import update_liquidity
 
 #
@@ -25,6 +26,7 @@ struct BatchedCollateral:
     member amount : felt
 end
 
+# k and lambda are stored as fixed point values 64x61
 struct Parameter:
     member k : felt
     member lambda : felt
@@ -348,6 +350,8 @@ func update_prices{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check
     _update_prices(
         prices_len=prices_len, prices=prices, mult=1, instrument=0, instruments=instruments
     )
+    let (count) = storage_instrument_count.read()
+    _update_volatility(instrument_count=count, mult=1)
     return ()
 end
 
@@ -379,8 +383,7 @@ func _update_prices{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_chec
 ) -> ():
     alloc_locals
     let (count) = storage_instrument_count.read()
-    if instrument == count + 1:
-        assert prices_len = 0
+    if instrument == count:
         return ()
     end
     let (prev_price) = storage_oracles.read(mult)
@@ -440,8 +443,59 @@ func _update_margin_parameters{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*,
 end
 
 func _update_volatility{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
-    instrument : felt
+    instrument_count : felt, mult : felt
 ) -> ():
+    alloc_locals
+    if instrument_count == 0:
+        return ()
+    end
+    let (price) = storage_oracles.read(mult)
+    let (prev_price) = storage_prev_oracles.read(mult)
+    let (price64x61) = Math64x61.fromFelt(price)
+    let (prev_price64x61) = Math64x61.fromFelt(prev_price)
+
+    # truncate by price precision (6)
+    let (price64x61, _) = unsigned_div_rem(price64x61, LIQUIDITY_PRECISION)
+    let (prev_price64x61, _) = unsigned_div_rem(prev_price64x61, LIQUIDITY_PRECISION)
+    let (price_return) = Math64x61.div(price64x61, prev_price64x61)
+
+    let (log_price_return) = Math64x61.log10(price_return)
+    let (exponant) = Math64x61.fromFelt(2)
+    let (square_log_price_return) = Math64x61.pow(log_price_return, exponant)
+
+    let (old_volatility) = storage_volatility.read(mult)
+    let (params) = storage_margin_parameters.read(mult)
+
+    let (new_volatility) = Math64x61.mul(params.lambda, old_volatility)
+    let (new_volatility) = Math64x61.add(new_volatility, square_log_price_return)
+    storage_volatility.write(mult, new_volatility)
+    _update_volatility(instrument_count=instrument_count - 1, mult=mult * 2)
+    return ()
+end
+
+# @notice Initiate previous prices for volatility calculation
+# @param prev_prices_len The length of the previous prices array
+# @param prev_prices The previous prices
+func init_prev_prices{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+    prev_prices_len : felt, prev_prices : felt*
+):
+    assert_only_owner()
+    let (count) = storage_instrument_count.read()
+    assert count = prev_prices_len
+    _init_prev_prices(prev_prices_len=prev_prices_len, prev_prices=prev_prices, mult=1)
+    return ()
+end
+
+func _init_prev_prices{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+    prev_prices_len : felt, prev_prices : felt*, mult : felt
+):
+    if prev_prices_len == 0:
+        return ()
+    end
+    storage_prev_oracles.write(mult, [prev_prices])
+    _init_prev_prices(
+        prev_prices_len=prev_prices_len - 1, prev_prices=prev_prices + 1, mult=mult * 2
+    )
     return ()
 end
 
