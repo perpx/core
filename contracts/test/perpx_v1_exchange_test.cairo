@@ -4,6 +4,8 @@ from starkware.cairo.common.cairo_builtins import HashBuiltin
 
 from contracts.perpx_v1_exchange import (
     update_prices,
+    init_prev_prices,
+    _update_volatility,
     update_margin_parameters,
     get_price,
     add_liquidity,
@@ -29,6 +31,22 @@ func update_prices_test{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_
     prices_len : felt, prices : felt*, instruments : felt
 ) -> ():
     update_prices(prices_len=prices_len, prices=prices, instruments=instruments)
+    return ()
+end
+
+@external
+func init_prev_prices_test{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+    prev_prices_len : felt, prev_prices : felt*
+) -> ():
+    init_prev_prices(prev_prices_len=prev_prices_len, prev_prices=prev_prices)
+    return ()
+end
+
+@external
+func update_volatility_test{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+    instrument_count : felt
+) -> ():
+    _update_volatility(instrument_count=instrument_count, mult=1)
     return ()
 end
 

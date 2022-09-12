@@ -3,14 +3,17 @@
 from starkware.cairo.common.cairo_builtins import HashBuiltin
 from starkware.cairo.common.alloc import alloc
 from starkware.cairo.common.uint256 import Uint256
+from starkware.cairo.common.math import unsigned_div_rem
 
 from contracts.constants.perpx_constants import (
     MAX_LIQUIDITY,
     RANGE_CHECK_BOUND,
     MAX_PRICE,
     MAX_AMOUNT,
+    LIQUIDITY_PRECISION,
 )
 from contracts.perpx_v1_exchange import Parameter
+from lib.cairo_math_64x61.contracts.cairo_math_64x61.math64x61 import Math64x61
 
 #
 # Constants
@@ -27,15 +30,17 @@ const MATH_PRECISION = 2 ** 64 + 2 ** 61
 
 @contract_interface
 namespace TestContract:
-    func view_price_test(instrument : felt) -> ():
+    func verify_length_test(length : felt, instruments : felt):
+    end
+    func init_prev_prices_test(prev_prices_len : felt, prev_prices : felt*):
+    end
+    func update_volatility_test(instrument_count : felt):
     end
     func update_prices_test(prices_len : felt, prices : felt*, instruments : felt):
     end
     func update_margin_parameters_test(
         parameters_len : felt, parameters : Parameter*, instruments : felt
     ):
-    end
-    func verify_length_test(length : felt, instruments : felt):
     end
 end
 
@@ -46,12 +51,10 @@ end
 @external
 func __setup__():
     alloc_locals
-    local address
     %{
         context.contract_address = deploy_contract("./contracts/test/perpx_v1_exchange_test.cairo", [ids.OWNER, 1234, ids.INSTRUMENT_COUNT]).contract_address 
         store(context.contract_address, "storage_msb_instrument", [2**(ids.INSTRUMENT_COUNT - 1)])
     %}
-
     return ()
 end
 
@@ -89,6 +92,83 @@ func test_verify_length{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_
         contract_address=address, length=length, instruments=instruments
     )
     %{ stop_prank_callable() %}
+    return ()
+end
+
+@external
+func test_init_prev_prices{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+    random : felt
+):
+    alloc_locals
+    let (local arr : felt*) = alloc()
+    local address
+    local length
+    %{
+        from random import randint
+        length = ids.random % (ids.INSTRUMENT_COUNT - 1) + 1
+        for i in range(length):
+            memory[ids.arr + i] = randint(0, ids.MAX_PRICE)
+        if length != ids.INSTRUMENT_COUNT:
+            expect_revert()
+        ids.address = context.contract_address
+        ids.length = length
+    %}
+    %{ stop_prank_callable = start_prank(ids.OWNER, target_contract_address=ids.address) %}
+    TestContract.init_prev_prices_test(
+        contract_address=address, prev_prices_len=length, prev_prices=arr
+    )
+    %{
+        stop_prank_callable() 
+        expect_revert(error_message="Ownable: caller is not the owner")
+    %}
+    TestContract.init_prev_prices_test(
+        contract_address=address, prev_prices_len=random, prev_prices=arr
+    )
+    return ()
+end
+
+@external
+func test_update_volatility{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+    random : felt
+):
+    alloc_locals
+    local address
+    %{
+        ids.address = context.contract_address
+        from random import seed,randint, random
+        seed(ids.random)
+        for i in range(ids.INSTRUMENT_COUNT):
+            store(context.contract_address, "storage_prev_oracles", [randint(0, ids.MAX_PRICE)], key=[2**i])
+            store(context.contract_address, "storage_oracles", [randint(0, ids.MAX_PRICE)], key=[2**i])
+            store(context.contract_address, "storage_volatility", [randint(0, ids.MAX_PRICE)], key=[2**i])
+            lmbd_int = randint(1, ids.MAX_LIQUIDITY)
+            lmbd_frac = int(random() * 2**61)
+            store(context.contract_address, "storage_margin_parameters", [0, lmbd_int+lmbd_frac], key=[2**i])
+        ids.address = context.contract_address
+    %}
+    %{
+        # get prev prices
+        prev_prices = []
+        prices = []
+        lambdas = []
+        vols = []
+        for i in range(ids.INSTRUMENT_COUNT):
+            prev_prices.append(load(ids.address, "storage_prev_oracles", "felt", key=[2**i])[0])
+            prices.append(load(ids.address, "storage_oracles", "felt", key=[2**i])[0])
+            lambdas.append(load(ids.address, "storage_margin_parameters", "Parameter", key=[2**i])[1])
+            vols.append(load(ids.address, "storage_volatility", "Parameter", key=[2**i])[0])
+    %}
+    TestContract.update_volatility_test(contract_address=address, instrument_count=INSTRUMENT_COUNT)
+    %{
+        import math
+        for i in range(ids.INSTRUMENT_COUNT):
+            volatility = load(ids.address, "storage_volatility", "felt", key=[2**i])[0]
+            p = prices[i] 
+            prev_p = prev_prices[i] 
+            vol = math.pow(math.log10(p/prev_p), 2) * 2**61 + lambdas[i] * vols[i] / 2**61
+            diff = vol - volatility
+            assert abs(diff / 2**61) < 1e-6, f'volatility error, expected error to be less than 1e-6, got {diff / 2**61}'
+    %}
     return ()
 end
 
