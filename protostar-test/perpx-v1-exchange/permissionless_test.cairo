@@ -12,51 +12,51 @@ from contracts.constants.perpx_constants import (
     MAX_COLLATERAL,
 )
 
-#
-# Constants
-#
+//
+// Constants
+//
 
-const PRIME = 2 ** 251 + 17 * 2 ** 192 + 1
-const OWNER = 12345
-const ACCOUNT = 123
-const INSTRUMENT_COUNT = 10
+const PRIME = 2 ** 251 + 17 * 2 ** 192 + 1;
+const OWNER = 12345;
+const ACCOUNT = 123;
+const INSTRUMENT_COUNT = 10;
 
-const ERC20_NAME = 8583683299111105110
-const ERC20_SYMBOL = 85836867
-const ERC20_DECIMALS = 6
+const ERC20_NAME = 8583683299111105110;
+const ERC20_SYMBOL = 85836867;
+const ERC20_DECIMALS = 6;
 
-#
-# Interface
-#
-
-@contract_interface
-namespace TestContract:
-    func add_liquidity_test(amount : felt, instrument : felt):
-    end
-    func remove_liquidity_test(amount : felt, instrument : felt):
-    end
-    func add_collateral_test(amount : felt):
-    end
-end
+//
+// Interface
+//
 
 @contract_interface
-namespace ERC20TestContract:
-    func transferFrom(sender : felt, recipient : felt, amount : Uint256):
-    end
-    func approve(spender : felt, amount : Uint256):
-    end
-    func mint(recipient : felt, amount : Uint256):
-    end
-end
+namespace TestContract {
+    func add_liquidity_test(amount: felt, instrument: felt) {
+    }
+    func remove_liquidity_test(amount: felt, instrument: felt) {
+    }
+    func add_collateral_test(amount: felt) {
+    }
+}
 
-#
-# Setup
-#
+@contract_interface
+namespace ERC20TestContract {
+    func transferFrom(sender: felt, recipient: felt, amount: Uint256) {
+    }
+    func approve(spender: felt, amount: Uint256) {
+    }
+    func mint(recipient: felt, amount: Uint256) {
+    }
+}
+
+//
+// Setup
+//
 
 @external
-func __setup__():
-    alloc_locals
-    local address
+func __setup__() {
+    alloc_locals;
+    local address;
     %{
         declared = declare("./contracts/test/ERC20_test.cairo")
         prepared = prepare(declared, [ids.ERC20_NAME, ids.ERC20_SYMBOL, ids.ERC20_DECIMALS])
@@ -67,25 +67,25 @@ func __setup__():
         store(prepared.contract_address, "ERC20_balances", [ids.RANGE_CHECK_BOUND - 1, 0], key=[ids.ACCOUNT])
     %}
 
-    return ()
-end
+    return ();
+}
 
 @external
-func test_add_liquidity{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
-    amount : felt
-):
-    alloc_locals
-    local instruments
-    local address
-    local erc_address
-    local instrument
+func test_add_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    amount: felt
+) {
+    alloc_locals;
+    local instruments;
+    local address;
+    local erc_address;
+    local instrument;
     %{
         ids.instrument = ids.amount % ids.INSTRUMENT_COUNT
         ids.erc_address = context.erc_contract_address
         ids.address = context.contract_address
     %}
 
-    # prank the approval and the add liquidity calls
+    // prank the approval and the add liquidity calls
     %{
         erc_stop_prank_callable = start_prank(ids.ACCOUNT, target_contract_address=ids.erc_address)
         stop_prank_callable = start_prank(ids.ACCOUNT, target_contract_address=ids.address)
@@ -94,13 +94,13 @@ func test_add_liquidity{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_
     %}
     ERC20TestContract.approve(
         contract_address=erc_address, spender=address, amount=Uint256(amount, 0)
-    )
+    );
     %{
         erc_stop_prank_callable()
         if ids.amount < 1 or ids.amount > ids.MAX_LIQUIDITY:
             expect_revert(error_message="liquidity increase limited to 2**64")
     %}
-    TestContract.add_liquidity_test(contract_address=address, amount=amount, instrument=instrument)
+    TestContract.add_liquidity_test(contract_address=address, amount=amount, instrument=instrument);
 
     %{
         stop_prank_callable() 
@@ -114,25 +114,25 @@ func test_add_liquidity{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_
         assert exchange_balance == [ids.amount, 0], f'exchange balance error, expected [{ids.amount}, 0] got {exchange_balance}'
     %}
 
-    return ()
-end
+    return ();
+}
 
 @external
-func test_remove_liquidity{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
-    provide_amount : felt, remove_amount : felt
-):
-    alloc_locals
-    local instruments
-    local address
-    local erc_address
-    local instrument
+func test_remove_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    provide_amount: felt, remove_amount: felt
+) {
+    alloc_locals;
+    local instruments;
+    local address;
+    local erc_address;
+    local instrument;
     %{
         ids.instrument = ids.provide_amount % ids.INSTRUMENT_COUNT
         ids.erc_address = context.erc_contract_address
         ids.address = context.contract_address
     %}
 
-    # prank the approval and the add liquidity calls
+    // prank the approval and the add liquidity calls
     %{
         erc_stop_prank_callable = start_prank(ids.ACCOUNT, target_contract_address=ids.erc_address)
         stop_prank_callable = start_prank(ids.ACCOUNT, target_contract_address=ids.address)
@@ -141,7 +141,7 @@ func test_remove_liquidity{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, ran
     %}
     ERC20TestContract.approve(
         contract_address=erc_address, spender=address, amount=Uint256(provide_amount, 0)
-    )
+    );
     %{
         erc_stop_prank_callable()
         if ids.provide_amount < 1 or ids.provide_amount > ids.MAX_LIQUIDITY:
@@ -149,7 +149,7 @@ func test_remove_liquidity{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, ran
     %}
     TestContract.add_liquidity_test(
         contract_address=address, amount=provide_amount, instrument=instrument
-    )
+    );
     %{
         if ids.remove_amount < 1 or ids.remove_amount > ids.MAX_LIQUIDITY:
             expect_revert(error_message="liquidity decrease limited to 2**64")
@@ -158,7 +158,7 @@ func test_remove_liquidity{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, ran
     %}
     TestContract.remove_liquidity_test(
         contract_address=address, amount=remove_amount, instrument=instrument
-    )
+    );
     %{
         stop_prank_callable() 
         user_stake = load(ids.address, "storage_user_stake", "Stake", key=[ids.ACCOUNT, ids.instrument])
@@ -169,22 +169,22 @@ func test_remove_liquidity{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, ran
         assert user_stake[1] == shares, f'user stake shares error, expected {shares}, got {user_stake[1]}'
     %}
 
-    return ()
-end
+    return ();
+}
 
 @external
-func test_add_collateral{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
-    amount : felt
-):
-    alloc_locals
-    local address
-    local erc_address
+func test_add_collateral{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    amount: felt
+) {
+    alloc_locals;
+    local address;
+    local erc_address;
     %{
         ids.erc_address = context.erc_contract_address
         ids.address = context.contract_address
     %}
 
-    # prank the approval and the add liquidity calls
+    // prank the approval and the add liquidity calls
     %{
         erc_stop_prank_callable = start_prank(ids.ACCOUNT, target_contract_address=ids.erc_address)
         stop_prank_callable = start_prank(ids.ACCOUNT, target_contract_address=ids.address)
@@ -193,13 +193,13 @@ func test_add_collateral{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range
     %}
     ERC20TestContract.approve(
         contract_address=erc_address, spender=address, amount=Uint256(amount, 0)
-    )
+    );
     %{
         erc_stop_prank_callable()
         if ids.amount < 1 or ids.amount > ids.MAX_COLLATERAL:
             expect_revert(error_message="collateral increase limited to 2**64")
     %}
-    TestContract.add_collateral_test(contract_address=address, amount=amount)
+    TestContract.add_collateral_test(contract_address=address, amount=amount);
 
     %{
         stop_prank_callable() 
@@ -212,5 +212,5 @@ func test_add_collateral{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range
         assert exchange_balance == [ids.amount, 0], f'exchange balance error, expected [{ids.amount}, 0] got {exchange_balance}'
     %}
 
-    return ()
-end
+    return ();
+}

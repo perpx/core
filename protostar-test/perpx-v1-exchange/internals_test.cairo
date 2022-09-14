@@ -11,48 +11,48 @@ from contracts.constants.perpx_constants import (
     MAX_AMOUNT,
 )
 
-#
-# Constants
-#
+//
+// Constants
+//
 
-const PRIME = 2 ** 251 + 17 * 2 ** 192 + 1
-const OWNER = 12345
-const ACCOUNT = 123
-const INSTRUMENT_COUNT = 10
+const PRIME = 2 ** 251 + 17 * 2 ** 192 + 1;
+const OWNER = 12345;
+const ACCOUNT = 123;
+const INSTRUMENT_COUNT = 10;
 
-#
-# Interface
-#
+//
+// Interface
+//
 
 @contract_interface
-namespace TestContract:
-    func calculate_pnl_test(owner : felt, instruments : felt) -> (pnl : felt):
-    end
-    func calculate_fees_test(owner : felt, instruments : felt) -> (fees : felt):
-    end
-end
+namespace TestContract {
+    func calculate_pnl_test(owner: felt, instruments: felt) -> (pnl: felt) {
+    }
+    func calculate_fees_test(owner: felt, instruments: felt) -> (fees: felt) {
+    }
+}
 
-#
-# Setup
-#
+//
+// Setup
+//
 
 @external
-func __setup__():
-    alloc_locals
-    local address
+func __setup__() {
+    alloc_locals;
+    local address;
     %{ context.contract_address = deploy_contract("./contracts/test/perpx_v1_exchange_test.cairo", [ids.OWNER, 1234, ids.INSTRUMENT_COUNT]).contract_address %}
 
-    return ()
-end
+    return ();
+}
 
 @external
-func test_calculate_pnl{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
-    random : felt
-):
-    alloc_locals
-    local instruments
-    local address
-    local length
+func test_calculate_pnl{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    random: felt
+) {
+    alloc_locals;
+    local instruments;
+    local address;
+    local length;
     %{
         from random import randint, sample
         length = ids.random % ids.INSTRUMENT_COUNT
@@ -77,19 +77,19 @@ func test_calculate_pnl{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_
     %}
     let (local pnl) = TestContract.calculate_pnl_test(
         contract_address=address, owner=ACCOUNT, instruments=instruments
-    )
+    );
     %{ assert pnl == ids.pnl, f'pnl error, expected {pnl}, got {ids.pnl}' %}
-    return ()
-end
+    return ();
+}
 
 @external
-func test_calculate_fees{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
-    random : felt
-):
-    alloc_locals
-    local instruments
-    local address
-    local length
+func test_calculate_fees{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    random: felt
+) {
+    alloc_locals;
+    local instruments;
+    local address;
+    local length;
     %{
         from random import randint, sample
         length = ids.random % ids.INSTRUMENT_COUNT
@@ -111,7 +111,7 @@ func test_calculate_fees{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range
     %}
     let (local fees) = TestContract.calculate_fees_test(
         contract_address=address, owner=ACCOUNT, instruments=instruments
-    )
+    );
     %{ assert fees == ids.fees, f'fees error, expected {fees}, got {ids.fees}' %}
-    return ()
-end
+    return ();
+}
