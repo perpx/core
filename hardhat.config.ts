@@ -3,7 +3,7 @@ import '@shardlabs/starknet-hardhat-plugin'
 module.exports = {
     solidity: '0.8.9',
     starknet: {
-        venv: 'active',
+        venv: '~/.virtualenvs/cairo-0.10',
         network: 'main',
     },
     networks: {
@@ -13,5 +13,8 @@ module.exports = {
     },
     mocha: {
         timeout: 1000000,
+    },
+    paths: {
+        cairoPaths: ['./lib/cairo_contracts', './lib/cairo_math_64x61'],
     },
 }
