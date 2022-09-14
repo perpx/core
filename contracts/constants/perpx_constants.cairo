@@ -7,11 +7,11 @@ const RANGE_CHECK_BOUND = 2 ** 128;
 // The prime is the range bound for felt on cairo
 const PRIME = 2 ** 251 + 17 * 2 ** 192 + 1;
 
-// The range for the amount of a trade should be in [-2**64, 2**64]
-const MAX_AMOUNT = 2 ** 64;
+// Project limit
+const LIMIT = 2 ** 64;
 
-// The range for the amount of collateral should be in [-2**64, 2**64]
-const MAX_COLLATERAL = 2 ** 64;
+// The minimal liquidity in a pool to enable trading
+const MIN_LIQUIDITY = 10 ** 6;
 
 // The max value used for range checks
 const MAX_BOUND = 2 ** 127;
@@ -22,11 +22,11 @@ const MAX_DIV = 2 ** 123;
 // The wad precision value
 const WAD_PRECISION = 10 ** 18;
 
-// The maximum liquidity value [0, 2**64)
-const MAX_LIQUIDITY = 2 ** 64;
-
 // The precision needed for the share calculation
 const SHARE_PRECISION = 10 ** 8;
 
 // The precision for the liquidity
 const LIQUIDITY_PRECISION = 10 ** 6;
+
+// The precision for the volatility fees
+const VOLATILITY_FEE_RATE_PRECISION = 10 ** 4;
