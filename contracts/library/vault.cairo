@@ -34,26 +34,6 @@ namespace Vault {
     //
     // Functions
     //
-    func view_shares{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
-        instrument: felt
-    ) -> (shares: felt) {
-        let (shares) = storage_shares.read(instrument);
-        return (shares=shares);
-    }
-
-    func view_user_stake{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
-        owner: felt, instrument: felt
-    ) -> (stake: Stake) {
-        let (stake) = storage_user_stake.read(owner, instrument);
-        return (stake=stake);
-    }
-
-    func view_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
-        instrument: felt
-    ) -> (liquidity: felt) {
-        let (_liquidity) = storage_liquidity.read(instrument);
-        return (liquidity=_liquidity);
-    }
 
     // @notice Provide liquidity to the pool for target instrument
     // @dev Formula to implement is amount*shares/liquidity
