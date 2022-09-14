@@ -1,5 +1,6 @@
 %lang starknet
 
+from contracts.library.position import Info, position, update_position, close_position
 from contracts.library.vault import Vault
 
 from starkware.cairo.common.cairo_builtins import HashBuiltin
@@ -22,9 +23,9 @@ func storage_shorts(instrument: felt) -> (amount: felt) {
 // Functions
 //
 
-// @notice Returns the amount of longs for the instrument
+// @notice Returns the notional amount of longs for the instrument
 // @param instrument The instrument's id
-// @return amount The amount of longs for the instrument
+// @return amount The notional amount of longs for the instrument
 func longs{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(instrument: felt) -> (
     amount: felt
 ) {
@@ -32,9 +33,9 @@ func longs{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(inst
     return (amount=amount);
 }
 
-// @notice Returns the amount of shorts for the instrument
+// @notice Returns the notional amount of shorts for the instrument
 // @param instrument The instrument's id
-// @return amount The amount of shorts for the instrument
+// @return amount The notional amount of shorts for the instrument
 func shorts{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(instrument: felt) -> (
     amount: felt
 ) {
@@ -42,7 +43,7 @@ func shorts{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(ins
     return (amount=amount);
 }
 
-// @notice Update long or short amount
+// @notice Update long or short notional amount
 // @dev Internal functions
 // @param amount The amount of liquidity (precision: 6)
 // @param price The price of the instrument
