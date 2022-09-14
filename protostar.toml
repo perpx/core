@@ -22,3 +22,6 @@ vault_test = [
 cairo-path = [
     "./protostar-test/"
 ]
+ignore = [
+    "starknet-artifacts"
+]
