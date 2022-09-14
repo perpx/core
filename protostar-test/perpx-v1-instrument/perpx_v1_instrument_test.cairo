@@ -4,53 +4,53 @@ from starkware.cairo.common.cairo_builtins import HashBuiltin
 from contracts.library.vault import Stake
 from contracts.constants.perpx_constants import MAX_LIQUIDITY, RANGE_CHECK_BOUND
 
-#
-# Constants
-#
+//
+// Constants
+//
 
-const PRIME = 2 ** 251 + 17 * 2 ** 192 + 1
-const INITIAL_SHARES = 2 ** 50
-const INITIAL_USER_SHARES = 2 ** 30
-const INITIAL_LIQUIDITY = 2 ** 60
-const INITIAL_USER_LIQUIDITY = 2 ** 40
+const PRIME = 2 ** 251 + 17 * 2 ** 192 + 1;
+const INITIAL_SHARES = 2 ** 50;
+const INITIAL_USER_SHARES = 2 ** 30;
+const INITIAL_LIQUIDITY = 2 ** 60;
+const INITIAL_USER_LIQUIDITY = 2 ** 40;
 
-const INITIAL_LONGS = 2 ** 19
-const INITIAL_SHORTS = 2 ** 21 + 1
-const PRICE = 10 ** 8
+const INITIAL_LONGS = 2 ** 19;
+const INITIAL_SHORTS = 2 ** 21 + 1;
+const PRICE = 10 ** 8;
 
-const OWNER = 1
-const INSTRUMENT = 1
+const OWNER = 1;
+const INSTRUMENT = 1;
 
-#
-# Interface
-#
+//
+// Interface
+//
 
 @contract_interface
-namespace TestContract:
-    func update_liquidity_test(amount : felt, owner : felt, instrument : felt) -> ():
-    end
-    func view_shares(instrument : felt) -> (shares : felt):
-    end
-    func view_user_stake(owner : felt, instrument : felt) -> (stake : Stake):
-    end
-    func view_liquidity(instrument : felt) -> (liquidity : felt):
-    end
-    func update_long_short_test(amount : felt, instrument : felt, is_long : felt):
-    end
-    func view_longs(instrument : felt) -> (longs : felt):
-    end
-    func view_shorts(instrument : felt) -> (shorts : felt):
-    end
-end
+namespace TestContract {
+    func update_liquidity_test(amount: felt, owner: felt, instrument: felt) -> () {
+    }
+    func view_shares(instrument: felt) -> (shares: felt) {
+    }
+    func view_user_stake(owner: felt, instrument: felt) -> (stake: Stake) {
+    }
+    func view_liquidity(instrument: felt) -> (liquidity: felt) {
+    }
+    func update_long_short_test(amount: felt, instrument: felt, is_long: felt) {
+    }
+    func view_longs(instrument: felt) -> (longs: felt) {
+    }
+    func view_shorts(instrument: felt) -> (shorts: felt) {
+    }
+}
 
-#
-# Setup
-#
+//
+// Setup
+//
 
 @external
-func __setup__():
-    alloc_locals
-    local address
+func __setup__() {
+    alloc_locals;
+    local address;
     %{
         context.contract_address = deploy_contract("./contracts/test/perpx_v1_instrument_test.cairo").contract_address 
         ids.address = context.contract_address
@@ -63,29 +63,29 @@ func __setup__():
         store(context.contract_address, "storage_shorts", [ids.INITIAL_SHORTS], key=[ids.INSTRUMENT])
     %}
 
-    return ()
-end
+    return ();
+}
 
 @external
 func test_update_liquidity_negative{
-    syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr
-}():
-    alloc_locals
-    local address
+    syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr
+}() {
+    alloc_locals;
+    local address;
     %{ ids.address = context.contract_address %}
-    let amount = PRIME - 2 ** 20
+    let amount = PRIME - 2 ** 20;
 
     TestContract.update_liquidity_test(
         contract_address=address, amount=amount, owner=OWNER, instrument=INSTRUMENT
-    )
+    );
 
     let (local liquidity) = TestContract.view_liquidity(
         contract_address=address, instrument=INSTRUMENT
-    )
-    let (local shares) = TestContract.view_shares(contract_address=address, instrument=INSTRUMENT)
-    let (local user_stake : Stake) = TestContract.view_user_stake(
+    );
+    let (local shares) = TestContract.view_shares(contract_address=address, instrument=INSTRUMENT);
+    let (local user_stake: Stake) = TestContract.view_user_stake(
         contract_address=address, owner=OWNER, instrument=INSTRUMENT
-    )
+    );
 
     %{
         amount = ids.amount
@@ -98,29 +98,29 @@ func test_update_liquidity_negative{
         assert(ids.INITIAL_USER_LIQUIDITY + amount == ids.user_stake.amount), f'user_amount: {ids.INITIAL_USER_LIQUIDITY + amount} different from {ids.user_stake.amount}'
         assert(ids.INITIAL_USER_SHARES + user_share_dec == ids.user_stake.shares), f'user_shares: {ids.INITIAL_USER_SHARES + user_share_dec} different from {ids.user_stake.shares}'
     %}
-    return ()
-end
+    return ();
+}
 
 @external
 func test_update_liquidity_positive{
-    syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr
-}():
-    alloc_locals
-    local address
+    syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr
+}() {
+    alloc_locals;
+    local address;
     %{ ids.address = context.contract_address %}
-    let amount = 2 ** 30
+    let amount = 2 ** 30;
 
     TestContract.update_liquidity_test(
         contract_address=address, amount=amount, owner=OWNER, instrument=INSTRUMENT
-    )
+    );
 
     let (local liquidity) = TestContract.view_liquidity(
         contract_address=address, instrument=INSTRUMENT
-    )
-    let (local shares) = TestContract.view_shares(contract_address=address, instrument=INSTRUMENT)
-    let (local user_stake : Stake) = TestContract.view_user_stake(
+    );
+    let (local shares) = TestContract.view_shares(contract_address=address, instrument=INSTRUMENT);
+    let (local user_stake: Stake) = TestContract.view_user_stake(
         contract_address=address, owner=OWNER, instrument=INSTRUMENT
-    )
+    );
 
     %{
         amount = ids.amount
@@ -133,17 +133,17 @@ func test_update_liquidity_positive{
         assert(ids.INITIAL_USER_LIQUIDITY + amount == ids.user_stake.amount), f'user_amount: {ids.INITIAL_USER_LIQUIDITY + amount} different from {ids.user_stake.amount}'
         assert(ids.INITIAL_USER_SHARES + user_share_dec == ids.user_stake.shares), f'user_shares: {ids.INITIAL_USER_SHARES + user_share_dec} different from {ids.user_stake.shares}'
     %}
-    return ()
-end
+    return ();
+}
 
 @external
-func test_update_liquidity{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
-    random : felt
-):
-    alloc_locals
-    local amount : felt
-    local random = random
-    local address
+func test_update_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    random: felt
+) {
+    alloc_locals;
+    local amount: felt;
+    local random = random;
+    local address;
     %{
         ids.address = context.contract_address
         assume(ids.random != 0)
@@ -155,15 +155,15 @@ func test_update_liquidity{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, ran
     %}
     TestContract.update_liquidity_test(
         contract_address=address, amount=amount, owner=OWNER, instrument=INSTRUMENT
-    )
+    );
 
     let (local liquidity) = TestContract.view_liquidity(
         contract_address=address, instrument=INSTRUMENT
-    )
-    let (local shares) = TestContract.view_shares(contract_address=address, instrument=INSTRUMENT)
-    let (local user_stake : Stake) = TestContract.view_user_stake(
+    );
+    let (local shares) = TestContract.view_shares(contract_address=address, instrument=INSTRUMENT);
+    let (local user_stake: Stake) = TestContract.view_user_stake(
         contract_address=address, owner=OWNER, instrument=INSTRUMENT
-    )
+    );
 
     %{
         import math
@@ -179,16 +179,16 @@ func test_update_liquidity{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, ran
         assert(ids.INITIAL_USER_LIQUIDITY + amount == ids.user_stake.amount), f'user_amount: {ids.INITIAL_USER_LIQUIDITY + amount} different from {ids.user_stake.amount}'
         assert(ids.INITIAL_USER_SHARES + user_share_inc == ids.user_stake.shares), f'user_shares: {ids.INITIAL_USER_SHARES + user_share_inc} different from {ids.user_stake.shares}'
     %}
-    return ()
-end
+    return ();
+}
 
 @external
-func test_update_longs{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
-    random : felt
-):
-    alloc_locals
-    local address
-    local amount = random
+func test_update_longs{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    random: felt
+) {
+    alloc_locals;
+    local address;
+    local amount = random;
     %{
         ids.address = context.contract_address
         # assume(ids.amount != 0)
@@ -197,24 +197,24 @@ func test_update_longs{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_c
     %}
     TestContract.update_long_short_test(
         contract_address=address, amount=amount, instrument=INSTRUMENT, is_long=1
-    )
+    );
 
-    let (local longs) = TestContract.view_longs(contract_address=address, instrument=INSTRUMENT)
+    let (local longs) = TestContract.view_longs(contract_address=address, instrument=INSTRUMENT);
 
     %{
         amount = ids.amount if ids.amount < PRIME/2 else - (PRIME - ids.amount)
         assert (ids.INITIAL_LONGS + amount == ids.longs), f'longs: {ids.INITIAL_LONGS + amount} different from {ids.longs}'
     %}
-    return ()
-end
+    return ();
+}
 
 @external
-func test_update_shorts{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
-    random : felt
-):
-    alloc_locals
-    local address
-    local amount = random
+func test_update_shorts{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    random: felt
+) {
+    alloc_locals;
+    local address;
+    local amount = random;
     %{
         import math
         ids.address = context.contract_address
@@ -224,13 +224,13 @@ func test_update_shorts{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_
     %}
     TestContract.update_long_short_test(
         contract_address=address, amount=amount, instrument=INSTRUMENT, is_long=0
-    )
+    );
 
-    let (local shorts) = TestContract.view_shorts(contract_address=address, instrument=INSTRUMENT)
+    let (local shorts) = TestContract.view_shorts(contract_address=address, instrument=INSTRUMENT);
 
     %{
         amount = ids.amount if ids.amount < PRIME/2 else -(PRIME - ids.amount)
         assert (ids.INITIAL_SHORTS + amount == ids.shorts), f'shorts: {ids.INITIAL_SHORTS + amount} different from {ids.shorts}'
     %}
-    return ()
-end
+    return ();
+}

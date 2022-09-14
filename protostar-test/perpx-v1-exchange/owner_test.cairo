@@ -15,58 +15,58 @@ from contracts.constants.perpx_constants import (
 from contracts.perpx_v1_exchange import Parameter
 from lib.cairo_math_64x61.contracts.cairo_math_64x61.math64x61 import Math64x61
 
-#
-# Constants
-#
+//
+// Constants
+//
 
-const PRIME = 2 ** 251 + 17 * 2 ** 192 + 1
-const OWNER = 12345
-const INSTRUMENT_COUNT = 10
-const MATH_PRECISION = 2 ** 64 + 2 ** 61
+const PRIME = 2 ** 251 + 17 * 2 ** 192 + 1;
+const OWNER = 12345;
+const INSTRUMENT_COUNT = 10;
+const MATH_PRECISION = 2 ** 64 + 2 ** 61;
 
-#
-# Interface
-#
+//
+// Interface
+//
 
 @contract_interface
-namespace TestContract:
-    func verify_length_test(length : felt, instruments : felt):
-    end
-    func init_prev_prices_test(prev_prices_len : felt, prev_prices : felt*):
-    end
-    func update_volatility_test(instrument_count : felt):
-    end
-    func update_prices_test(prices_len : felt, prices : felt*, instruments : felt):
-    end
+namespace TestContract {
+    func verify_length_test(length: felt, instruments: felt) {
+    }
+    func init_prev_prices_test(prev_prices_len: felt, prev_prices: felt*) {
+    }
+    func update_volatility_test(instrument_count: felt) {
+    }
+    func update_prices_test(prices_len: felt, prices: felt*, instruments: felt) {
+    }
     func update_margin_parameters_test(
-        parameters_len : felt, parameters : Parameter*, instruments : felt
-    ):
-    end
-end
+        parameters_len: felt, parameters: Parameter*, instruments: felt
+    ) {
+    }
+}
 
-#
-# Setup
-#
+//
+// Setup
+//
 
 @external
-func __setup__():
-    alloc_locals
+func __setup__() {
+    alloc_locals;
     %{
         context.contract_address = deploy_contract("./contracts/test/perpx_v1_exchange_test.cairo", [ids.OWNER, 1234, ids.INSTRUMENT_COUNT]).contract_address 
         store(context.contract_address, "storage_msb_instrument", [2**(ids.INSTRUMENT_COUNT - 1)])
     %}
-    return ()
-end
+    return ();
+}
 
 @external
-func test_verify_length{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
-    random : felt
-):
-    alloc_locals
-    let (local arr) = alloc()
-    local instruments
-    local address
-    local length
+func test_verify_length{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    random: felt
+) {
+    alloc_locals;
+    let (local arr) = alloc();
+    local instruments;
+    local address;
+    local length;
     %{
         assume(ids.random !=0)
         from random import randint, sample, random
@@ -90,19 +90,19 @@ func test_verify_length{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_
     %}
     TestContract.verify_length_test(
         contract_address=address, length=length, instruments=instruments
-    )
+    );
     %{ stop_prank_callable() %}
-    return ()
-end
+    return ();
+}
 
 @external
-func test_init_prev_prices{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
-    random : felt
-):
-    alloc_locals
-    let (local arr : felt*) = alloc()
-    local address
-    local length
+func test_init_prev_prices{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    random: felt
+) {
+    alloc_locals;
+    let (local arr: felt*) = alloc();
+    local address;
+    local length;
     %{
         from random import randint
         length = ids.random % (ids.INSTRUMENT_COUNT - 1) + 1
@@ -116,23 +116,23 @@ func test_init_prev_prices{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, ran
     %{ stop_prank_callable = start_prank(ids.OWNER, target_contract_address=ids.address) %}
     TestContract.init_prev_prices_test(
         contract_address=address, prev_prices_len=length, prev_prices=arr
-    )
+    );
     %{
         stop_prank_callable() 
         expect_revert(error_message="Ownable: caller is not the owner")
     %}
     TestContract.init_prev_prices_test(
         contract_address=address, prev_prices_len=random, prev_prices=arr
-    )
-    return ()
-end
+    );
+    return ();
+}
 
 @external
-func test_update_volatility{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
-    random : felt
-):
-    alloc_locals
-    local address
+func test_update_volatility{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    random: felt
+) {
+    alloc_locals;
+    local address;
     %{
         ids.address = context.contract_address
         from random import seed,randint, random
@@ -158,7 +158,9 @@ func test_update_volatility{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, ra
             lambdas.append(load(ids.address, "storage_margin_parameters", "Parameter", key=[2**i])[1])
             vols.append(load(ids.address, "storage_volatility", "Parameter", key=[2**i])[0])
     %}
-    TestContract.update_volatility_test(contract_address=address, instrument_count=INSTRUMENT_COUNT)
+    TestContract.update_volatility_test(
+        contract_address=address, instrument_count=INSTRUMENT_COUNT
+    );
     %{
         import math
         for i in range(ids.INSTRUMENT_COUNT):
@@ -169,17 +171,17 @@ func test_update_volatility{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, ra
             diff = vol - volatility
             assert abs(diff / 2**61) < 1e-6, f'volatility error, expected error to be less than 1e-6, got {diff / 2**61}'
     %}
-    return ()
-end
+    return ();
+}
 
 @external
-func test_updates{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(random : felt):
-    alloc_locals
-    let (local arr_prices) = alloc()
-    let (local arr_parameters : Parameter*) = alloc()
-    local instruments
-    local address
-    local length
+func test_updates{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(random: felt) {
+    alloc_locals;
+    let (local arr_prices) = alloc();
+    let (local arr_parameters: Parameter*) = alloc();
+    local instruments;
+    local address;
+    local length;
     %{
         from random import randint, sample
         length = ids.random % ids.INSTRUMENT_COUNT
@@ -204,13 +206,13 @@ func test_updates{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_
     %{ stop_prank_callable = start_prank(ids.OWNER, target_contract_address=context.contract_address) %}
     TestContract.update_prices_test(
         contract_address=address, prices_len=length, prices=arr_prices, instruments=instruments
-    )
+    );
     TestContract.update_margin_parameters_test(
         contract_address=address,
         parameters_len=length,
         parameters=arr_parameters,
         instruments=instruments,
-    )
+    );
     %{
         stop_prank_callable() 
         instruments = ids.instruments
@@ -235,5 +237,5 @@ func test_updates{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_
             price = load(ids.address, "storage_prev_oracles", "felt", key=[2**i])[0]
             assert last_prices[i] == price, f'last price error, expected {last_prices[i]}, got {price}'
     %}
-    return ()
-end
+    return ();
+}
