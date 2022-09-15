@@ -4,18 +4,12 @@ from starkware.cairo.common.cairo_builtins import HashBuiltin
 from starkware.cairo.common.alloc import alloc
 from starkware.cairo.common.uint256 import Uint256
 
-from contracts.constants.perpx_constants import (
-    MAX_LIQUIDITY,
-    RANGE_CHECK_BOUND,
-    MAX_PRICE,
-    MAX_AMOUNT,
-)
+from contracts.constants.perpx_constants import RANGE_CHECK_BOUND, LIMIT
 
 //
 // Constants
 //
 
-const PRIME = 2 ** 251 + 17 * 2 ** 192 + 1;
 const OWNER = 12345;
 const ACCOUNT = 123;
 const INSTRUMENT_COUNT = 10;
@@ -40,6 +34,7 @@ namespace TestContract {
 func __setup__() {
     alloc_locals;
     local address;
+    %{ max_examples(200) %}
     %{ context.contract_address = deploy_contract("./contracts/test/perpx_v1_exchange_test.cairo", [ids.OWNER, 1234, ids.INSTRUMENT_COUNT]).contract_address %}
 
     return ();
@@ -62,9 +57,9 @@ func test_calculate_pnl{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_ch
             inst = 1 << bit
             instruments |= inst
 
-            price = randint(0, ids.MAX_PRICE)
-            amount = randint(0, ids.MAX_AMOUNT)
-            cost = randint(0, ids.MAX_AMOUNT)
+            price = randint(0, ids.LIMIT)
+            amount = randint(0, ids.LIMIT)
+            cost = randint(0, ids.LIMIT)
             pnl += price * amount - cost
 
             store(context.contract_address, "storage_oracles", [price], key=[inst])
@@ -99,7 +94,7 @@ func test_calculate_fees{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_c
             inst = 1 << bit
             instruments |= inst
 
-            fee = randint(0, ids.MAX_AMOUNT)
+            fee = randint(0, ids.LIMIT)
             fees += fee
 
             store(context.contract_address, "storage_positions", [fee, 0, 0], key=[ids.ACCOUNT, inst])

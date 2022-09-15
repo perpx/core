@@ -14,6 +14,7 @@ from contracts.perpx_v1_exchange import (
     _calculate_pnl,
     _calculate_fees,
     _verify_length,
+    constructor,
     Parameter,
 )
 from contracts.library.position import Position

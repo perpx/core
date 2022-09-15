@@ -4,19 +4,12 @@ from starkware.cairo.common.cairo_builtins import HashBuiltin
 from starkware.cairo.common.alloc import alloc
 from starkware.cairo.common.uint256 import Uint256
 
-from contracts.constants.perpx_constants import (
-    MAX_LIQUIDITY,
-    RANGE_CHECK_BOUND,
-    MAX_PRICE,
-    MAX_AMOUNT,
-    MAX_COLLATERAL,
-)
+from contracts.constants.perpx_constants import RANGE_CHECK_BOUND, LIMIT
 
 //
 // Constants
 //
 
-const PRIME = 2 ** 251 + 17 * 2 ** 192 + 1;
 const OWNER = 12345;
 const ACCOUNT = 123;
 const INSTRUMENT_COUNT = 10;
@@ -58,6 +51,7 @@ func __setup__() {
     alloc_locals;
     local address;
     %{
+        max_examples(200)
         declared = declare("./contracts/test/ERC20_test.cairo")
         prepared = prepare(declared, [ids.ERC20_NAME, ids.ERC20_SYMBOL, ids.ERC20_DECIMALS])
         deploy(prepared)
@@ -97,7 +91,7 @@ func test_add_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_ch
     );
     %{
         erc_stop_prank_callable()
-        if ids.amount < 1 or ids.amount > ids.MAX_LIQUIDITY:
+        if ids.amount < 1 or ids.amount > ids.LIMIT:
             expect_revert(error_message="liquidity increase limited to 2**64")
     %}
     TestContract.add_liquidity_test(contract_address=address, amount=amount, instrument=instrument);
@@ -144,14 +138,14 @@ func test_remove_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range
     );
     %{
         erc_stop_prank_callable()
-        if ids.provide_amount < 1 or ids.provide_amount > ids.MAX_LIQUIDITY:
+        if ids.provide_amount < 1 or ids.provide_amount > ids.LIMIT:
             expect_revert(error_message="liquidity increase limited to 2**64")
     %}
     TestContract.add_liquidity_test(
         contract_address=address, amount=provide_amount, instrument=instrument
     );
     %{
-        if ids.remove_amount < 1 or ids.remove_amount > ids.MAX_LIQUIDITY:
+        if ids.remove_amount < 1 or ids.remove_amount > ids.LIMIT:
             expect_revert(error_message="liquidity decrease limited to 2**64")
         elif ids.remove_amount > ids.provide_amount:
             expect_revert(error_message="insufficient balance")
@@ -196,7 +190,7 @@ func test_add_collateral{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_c
     );
     %{
         erc_stop_prank_callable()
-        if ids.amount < 1 or ids.amount > ids.MAX_COLLATERAL:
+        if ids.amount < 1 or ids.amount > ids.LIMIT:
             expect_revert(error_message="collateral increase limited to 2**64")
     %}
     TestContract.add_collateral_test(contract_address=address, amount=amount);
