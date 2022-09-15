@@ -1,26 +1,24 @@
 %lang starknet
 
 from starkware.cairo.common.cairo_builtins import HashBuiltin
-from contracts.library.fees import fee_bps, compute_fee_bps, rest
+from contracts.library.fees import Fees
 
 from starkware.cairo.common.math import unsigned_div_rem, abs_value
 
-@view
-func get_rest{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() -> (res: felt) {
-    let (res) = rest();
-    return (res=res);
-}
-
-@view
-func get_fee_bps{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() -> (res: felt) {
-    let (res) = fee_bps();
-    return (res=res);
+@external
+func compute_imbalance_fee_test{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    price: felt, amount: felt, long: felt, short: felt, liquidity: felt
+) -> (res: felt) {
+    let (imbalance_fee) = Fees.compute_imbalance_fee(price, amount, long, short, liquidity);
+    return (res=imbalance_fee);
 }
 
 @external
-func compute_fee_bps_test{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+func compute_fees_test{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
     price: felt, amount: felt, long: felt, short: felt, liquidity: felt
-) -> () {
-    compute_fee_bps(price, amount, long, short, liquidity);
-    return ();
+) -> (res: felt) {
+    let (fees) = Fees.compute_fees(
+        price=price, amount=amount, long=long, short=short, liquidity=liquidity
+    );
+    return (res=fees);
 }

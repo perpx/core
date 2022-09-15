@@ -7,14 +7,14 @@ from contracts.library.position import Info
 
 @contract_interface
 namespace IPerpxV1Instrument {
-    // @notice Returns the amount of longs for the instrument
+    // @notice Returns the notional amount of longs for the instrument
     // @param instrument The instrument's id
-    // @return amount The amount of longs for the instrument
+    // @return amount The notional amount of longs for the instrument
     func longs(instrument: felt) -> (amount: felt) {
     }
-    // @notice Returns the amount of shorts for the instrument
+    // @notice Returns the notional amount of shorts for the instrument
     // @param instrument The instrument's id
-    // @return amount The amount of shorts for the instrument
+    // @return amount The notional amount of shorts for the instrument
     func shorts(instrument: felt) -> (amount: felt) {
     }
 }

@@ -1,86 +1,71 @@
 %lang starknet
 
 from starkware.cairo.common.cairo_builtins import HashBuiltin
-from starkware.cairo.common.math import unsigned_div_rem, signed_div_rem, assert_not_zero
-from contracts.constants.perpx_constants import (
-    MAX_PRICE,
-    MAX_AMOUNT,
-    MAX_BOUND,
-    MAX_DIV,
-    RANGE_CHECK_BOUND,
+from starkware.cairo.common.math import (
+    unsigned_div_rem,
+    signed_div_rem,
+    assert_not_zero,
+    abs_value,
+    assert_lt,
 )
+from contracts.constants.perpx_constants import MAX_BOUND, VOLATILITY_FEE_RATE_PRECISION
+
+//
+// Storage
+//
 
 @storage_var
-func storage_fee_bps() -> (feeBps: felt) {
+func storage_volatility_fee_rate() -> (volatility_fee_rate: felt) {
 }
 
-@storage_var
-func storage_rest() -> (rest: felt) {
-}
+namespace Fees {
+    //
+    // Functions
+    //
 
-func rest{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() -> (res: felt) {
-    let (res) = storage_rest.read();
-    return (res=res);
-}
+    // @notice Computes the total fees by adding the volatlity_fees to the imbalance_fee
+    // @param price The price of the instrument
+    // @param amount The amount of traded instrument
+    // @param long The notional size of longs
+    // @param short The notional size of shorts
+    // @param liquidity The liquidity for the instrument
+    // @return fees The fees for the trade
+    func compute_fees{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+        price: felt, amount: felt, long: felt, short: felt, liquidity: felt
+    ) -> (fees: felt) {
+        alloc_locals;
+        let (local volatility_fee_rate) = storage_volatility_fee_rate.read();
+        let (local imbalance_fee) = compute_imbalance_fee(
+            price=price, amount=amount, long=long, short=short, liquidity=liquidity
+        );
+        let abs_imbalance_fee = abs_value(imbalance_fee);
+        let volatility_fee = volatility_fee_rate * abs_imbalance_fee;
+        let (abs_volatility_fee, _) = unsigned_div_rem(
+            volatility_fee, VOLATILITY_FEE_RATE_PRECISION
+        );
+        let fees = imbalance_fee + abs_volatility_fee;
+        return (fees=fees);
+    }
 
-func fee_bps{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() -> (res: felt) {
-    let (res) = storage_fee_bps.read();
-    return (res=res);
-}
+    // @notice Computes the imbalance fee for the trade
+    // @param price The price of the instrument
+    // @param amount The amount of traded instrument
+    // @param long The notional size of longs
+    // @param short The notional size of shorts
+    // @param liquidity The liquidity for the instrument
+    // @return imbalance_fee The imbalance fee for the trade
+    func compute_imbalance_fee{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+        price: felt, amount: felt, long: felt, short: felt, liquidity: felt
+    ) -> (imbalance_fee: felt) {
+        // calculate nominator of formula
+        tempvar value = price * amount * (2 * long + price * amount - 2 * short);
 
-// @notice Computes the feeBps based on the instrument state and user size
-// @param price The price of the instrument
-// @param amount Number of assets to buy
-// @param long Size of the longs for that instrument
-// @param short Size of the shorts for that instrument
-// @param liquidity Size of the liquidity for that instrument
-func compute_fee_bps{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
-    price: felt, amount: felt, long: felt, short: felt, liquidity: felt
-) -> () {
-    alloc_locals;
+        // calculate denominator of formula
+        tempvar div = 2 * liquidity;
 
-    // #  checks that price is not equal to 0
-    assert_not_zero(price);
+        // calculate result
+        let (imbalance_fee, _) = signed_div_rem(value, div, MAX_BOUND);
 
-    // # calculate nominator of formula
-    tempvar value = price * amount * (2 * long + price * amount - 2 * short);
-
-    // # # calculate denominator of formula
-    tempvar div = 2 * liquidity;
-
-    // # # range limits for all values
-    range_check_fees(price, amount, long, short, liquidity, value, div);
-
-    // # # calculate result
-    // let (local fee_bps, _) = unsigned_div_rem(value, div)
-    let (local fee_bps, local rest) = signed_div_rem(value, div, MAX_BOUND);
-
-    storage_fee_bps.write(fee_bps);
-    storage_rest.write(rest);
-
-    return ();
-}
-
-func range_check_fees{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
-    price: felt, amount: felt, long: felt, short: felt, liquidity: felt, value: felt, div: felt
-) -> () {
-    // # cannot be negative
-    [range_check_ptr] = price;
-    assert [range_check_ptr + 1] = MAX_PRICE - price - 1;
-
-    assert [range_check_ptr + 2] = amount + MAX_AMOUNT;
-    assert [range_check_ptr + 3] = MAX_AMOUNT - amount - 1;
-
-    // # can be negative
-    // # not too small
-    assert [range_check_ptr + 4] = value + MAX_BOUND;
-    // # not too big
-    assert [range_check_ptr + 5] = MAX_BOUND - value - 1;
-
-    [range_check_ptr + 6] = div;
-    assert [range_check_ptr + 7] = MAX_DIV - div - 1;
-
-    let range_check_ptr = range_check_ptr + 8;
-
-    return ();
+        return (imbalance_fee=imbalance_fee);
+    }
 }
