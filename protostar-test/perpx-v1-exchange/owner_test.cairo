@@ -8,7 +8,7 @@ from starkware.starknet.common.syscalls import get_contract_address
 
 from contracts.constants.perpx_constants import LIMIT, RANGE_CHECK_BOUND, LIQUIDITY_PRECISION
 from contracts.perpx_v1_exchange.owners import (
-    init_prev_prices,
+    update_prev_prices,
     _update_volatility,
     update_prices,
     update_margin_parameters,
@@ -51,7 +51,7 @@ func __setup__{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
 }
 
 @external
-func test_init_prev_prices{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+func test_update_prev_prices{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
     random: felt
 ) {
     alloc_locals;
@@ -63,7 +63,7 @@ func test_init_prev_prices{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range
             memory[ids.arr + i] = prev
     %}
     %{ stop_prank_callable = start_prank(ids.OWNER) %}
-    init_prev_prices(prev_prices_len=INSTRUMENT_COUNT, prev_prices=arr);
+    update_prev_prices(prev_prices_len=INSTRUMENT_COUNT, prev_prices=arr);
     %{
         for i in range(ids.INSTRUMENT_COUNT):
             price = load(context.self_address, "storage_prev_oracles", "felt", key=[2**i])[0]
@@ -72,7 +72,7 @@ func test_init_prev_prices{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range
         start_prank(1)
         expect_revert(error_message="Ownable: caller is not the owner")
     %}
-    init_prev_prices(prev_prices_len=random, prev_prices=arr);
+    update_prev_prices(prev_prices_len=random, prev_prices=arr);
     return ();
 }
 

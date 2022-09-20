@@ -161,28 +161,28 @@ func _update_volatility{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_ch
     return ();
 }
 
-// @notice Initiate previous prices for volatility calculation
+// @notice Update previous prices for volatility calculation
 // @param prev_prices_len The length of the previous prices array
 // @param prev_prices The previous prices
 @external
-func init_prev_prices{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+func update_prev_prices{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
     prev_prices_len: felt, prev_prices: felt*
 ) {
     assert_only_owner();
     let (count) = storage_instrument_count.read();
     assert count = prev_prices_len;
-    _init_prev_prices(prev_prices_len=prev_prices_len, prev_prices=prev_prices, mult=1);
+    _update_prev_prices(prev_prices_len=prev_prices_len, prev_prices=prev_prices, mult=1);
     return ();
 }
 
-func _init_prev_prices{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+func _update_prev_prices{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
     prev_prices_len: felt, prev_prices: felt*, mult: felt
 ) {
     if (prev_prices_len == 0) {
         return ();
     }
     storage_prev_oracles.write(mult, [prev_prices]);
-    _init_prev_prices(
+    _update_prev_prices(
         prev_prices_len=prev_prices_len - 1, prev_prices=prev_prices + 1, mult=mult * 2
     );
     return ();
