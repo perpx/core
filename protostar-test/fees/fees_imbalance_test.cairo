@@ -3,7 +3,7 @@
 from starkware.cairo.common.cairo_builtins import HashBuiltin
 from contracts.library.fees import Fees
 from contracts.constants.perpx_constants import RANGE_CHECK_BOUND, LIMIT, MAX_BOUND, MIN_LIQUIDITY
-from contracts.test.helpers import setup_helpers
+from helpers.helpers import setup_helpers
 
 //
 // Setup
@@ -27,14 +27,9 @@ func test_liquidity_compute_imbalance_fees{
     alloc_locals;
     local liquidity;
     %{
+        # assumed limits when computing the fees
         assume(ids.short < ids.LIMIT and ids.long < ids.LIMIT and abs(ids.price*ids.amount) < ids.LIMIT)
-        amount = context.signed_int(ids.amount)
-        price = ids.price
-        long = ids.long
-        short = ids.short
         ids.liquidity = ids.MIN_LIQUIDITY
-        nom = price * amount * (2 * long + price * amount - 2 * short)
-        denom = 2 * ids.liquidity
     %}
 
     // compute imbalance fees
@@ -43,58 +38,44 @@ func test_liquidity_compute_imbalance_fees{
     );
 
     %{
-        imbalance = context.signed_int(ids.imbalance_fees)
-        imbalance_fees = nom // denom
+        amount = context.signed_int(ids.amount)
+        imbalance_fees = ids.price * amount * (2 * ids.long + ids.price * amount - 2 * ids.short) // (2 * ids.liquidity)
 
+        imbalance = context.signed_int(ids.imbalance_fees)
         assert imbalance == imbalance_fees, f'imbalance fee error, expected {imbalance_fees}, got {imbalance}'
     %}
-
     return ();
 }
 
 @external
 func test_longs_shorts_compute_imbalance_fees{
     syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr
-}(price: felt, amount: felt, liquidity: felt) {
+}(price: felt, amount: felt, liq: felt) {
     alloc_locals;
-    local long = LIMIT;
-    local short = LIMIT;
-    local liq;
+    local liquidity;
     %{
         assume(abs(ids.price*ids.amount) < ids.LIMIT)
-        amount = context.signed_int(ids.amount)
-        mod = ids.liquidity % (ids.LIMIT - 1) + 1
-        ids.liq = mod if mod > ids.MIN_LIQUIDITY else mod + ids.MIN_LIQUIDITY
-        price = ids.price
-        long = ids.LIMIT
-        short = 0
-        nom = price * amount * (2 * long + price * amount - 2 * short)
-        denom = 2 * ids.liq
+        ids.liquidity = ids.liq % (ids.LIMIT - ids.MIN_LIQUIDITY) + ids.MIN_LIQUIDITY
     %}
     // compute imbalance fees
     let (local imbalance_fees) = Fees.compute_imbalance_fee(
-        price=price, amount=amount, long=long, short=0, liquidity=liq
+        price=price, amount=amount, long=LIMIT, short=0, liquidity=liquidity
     );
     %{
-        imbalance = context.signed_int(ids.imbalance_fees)
-        imbalance_fees = nom // denom
+        amount = context.signed_int(ids.amount)
+        imbalance_fees = ids.price * amount * (2 * ids.LIMIT + ids.price * amount) // (2 * ids.liquidity)
 
+        imbalance = context.signed_int(ids.imbalance_fees)
         assert imbalance == imbalance_fees, f'imbalance fee error, expected {imbalance_fees}, got {imbalance}'
     %}
-    %{
-        long = 0
-        short = ids.LIMIT
-        nom = price * amount * (2 * long + price * amount - 2 * short)
-        denom = 2 * ids.liq
-    %}
     // compute imbalance fees
     let (local imbalance_fees) = Fees.compute_imbalance_fee(
-        price=price, amount=amount, long=0, short=short, liquidity=liq
+        price=price, amount=amount, long=0, short=LIMIT, liquidity=liquidity
     );
     %{
-        imbalance = context.signed_int(ids.imbalance_fees)
-        imbalance_fees = nom // denom
+        imbalance_fees = ids.price * amount * (ids.price * amount - 2 * ids.LIMIT) // (2 * ids.liquidity)
 
+        imbalance = context.signed_int(ids.imbalance_fees)
         assert imbalance == imbalance_fees, f'imbalance fee error, expected {imbalance_fees}, got {imbalance}'
     %}
     return ();
