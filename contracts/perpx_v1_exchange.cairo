@@ -21,8 +21,8 @@ from contracts.perpx_v1_exchange.mutables import (
 from contracts.perpx_v1_exchange.owners import (
     update_prices,
     update_margin_parameters,
-    init_prev_prices,
-    _init_prev_prices,
+    update_prev_prices,
+    _update_prev_prices,
 )
 from contracts.perpx_v1_exchange.storage import storage_token, storage_instrument_count
 
@@ -42,6 +42,6 @@ func constructor{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr
     init_access_control(owner);
     storage_token.write(token);
     storage_instrument_count.write(instrument_count);
-    _init_prev_prices(prev_prices_len=prev_prices_len, prev_prices=prev_prices, mult=1);
+    _update_prev_prices(prev_prices_len=prev_prices_len, prev_prices=prev_prices, mult=1);
     return ();
 }
