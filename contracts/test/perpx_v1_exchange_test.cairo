@@ -1,22 +1,22 @@
 %lang starknet
 
 from starkware.cairo.common.cairo_builtins import HashBuiltin
-
-from contracts.perpx_v1_exchange import (
+from contracts.perpx_v1_exchange.permissionless import (
+    add_liquidity,
+    remove_liquidity,
+    add_collateral,
+)
+from contracts.perpx_v1_exchange.owners import (
     update_prices,
     init_prev_prices,
     _update_volatility,
     update_margin_parameters,
-    get_price,
-    add_liquidity,
-    remove_liquidity,
-    add_collateral,
-    _calculate_pnl,
-    _calculate_fees,
-    _verify_length,
-    constructor,
-    Parameter,
 )
+from contracts.perpx_v1_exchange.internals import _calculate_pnl, _calculate_fees, _verify_length
+from contracts.perpx_v1_exchange.structures import Parameter
+from contracts.perpx_v1_exchange.mutables import get_price
+
+from contracts.perpx_v1_exchange import constructor
 from contracts.library.position import Position
 
 @view
