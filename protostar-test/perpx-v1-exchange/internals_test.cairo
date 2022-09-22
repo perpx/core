@@ -19,6 +19,7 @@ from contracts.perpx_v1_exchange.internals import (
     _calculate_exit_fees,
     storage_oracles,
 )
+from contracts.perpx_v1_exchange.storage import storage_instrument_count
 from contracts.perpx_v1_instrument import storage_longs, storage_shorts
 from contracts.library.position import storage_positions
 from contracts.library.vault import storage_liquidity
@@ -81,16 +82,51 @@ func test_verify_length{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_ch
 func test_verify_length_limit{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
     alloc_locals;
     // test case: length = 0, instruments = (PRIME-1)/2
-    // test case: length = (PRIME-1)/2, instruments = 0
     %{ expect_revert() %}
     _verify_length(length=0, instruments=(PRIME - 1) / 2);
+    // test case: length = (PRIME-1)/2, instruments = 0
     %{ expect_revert() %}
     _verify_length(length=(PRIME - 1) / 2, instruments=0);
     return ();
 }
 
 @external
-func test_calculate_pnl{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+func test_verify_instruments{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    random: felt
+) {
+    alloc_locals;
+    local instruments;
+    %{
+        assume(ids.random !=0)
+        from random import randint, sample, seed
+        seed(ids.random)
+        # generate random instruments and store the instrument count
+        ids.instruments = randint(1, 2**(ids.INSTRUMENT_COUNT+1))
+        store(context.self_address, "storage_instrument_count", [ids.INSTRUMENT_COUNT])
+        if ids.instruments > 2**ids.INSTRUMENT_COUNT:
+            expect_revert(error_message="instruments limited to 2**instrument_count")
+    %}
+    _verify_instruments(instruments=instruments);
+    return ();
+}
+
+@external
+func test_verify_instruments_limit{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    ) {
+    alloc_locals;
+    local instruments;
+    // test case: instruments=2**ids.instrument_count
+    %{
+        ids.instruments = 2**ids.INSTRUMENT_COUNT
+        store(context.self_address, "storage_instrument_count", [ids.INSTRUMENT_COUNT])
+        expect_revert(error_message="instruments limited to 2**instrument_count - 1")
+    %}
+    _verify_instruments(instruments=instruments);
+    return ();
+}
+
+@external
+func est_calculate_pnl{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
     random: felt
 ) {
     alloc_locals;

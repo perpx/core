@@ -84,8 +84,8 @@ func test_update_volatility{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, rang
     %{
         from random import seed,randint, random
         seed(ids.random)
-        prev_prices = [randint(0, ids.LIMIT) for x in range(ids.INSTRUMENT_COUNT)]
-        prices = [randint(0, ids.LIMIT) for x in range(ids.INSTRUMENT_COUNT)]
+        prev_prices = [randint(1, ids.LIMIT) for x in range(ids.INSTRUMENT_COUNT)]
+        prices = [randint(1, ids.LIMIT) for x in range(ids.INSTRUMENT_COUNT)]
         lambdas = [randint(0, ids.MATH_PRECISION) for x in range(ids.INSTRUMENT_COUNT)]
         prev_vols = [randint(0, ids.LIMIT) for x in range(ids.INSTRUMENT_COUNT)]
         for i in range(ids.INSTRUMENT_COUNT):
