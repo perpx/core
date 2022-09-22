@@ -4,11 +4,18 @@ from starkware.cairo.common.cairo_builtins import HashBuiltin
 from starkware.cairo.common.math import unsigned_div_rem
 from starkware.cairo.common.pow import pow
 
-from contracts.perpx_v1_exchange.storage import storage_oracles, storage_instrument_count
+from contracts.perpx_v1_exchange.storage import (
+    storage_oracles,
+    storage_instrument_count,
+    storage_margin_parameters,
+    storage_volatility,
+)
 from contracts.perpx_v1_instrument import storage_longs, storage_shorts
+from contracts.perpx_v1_exchange.structures import Parameter
 from contracts.library.vault import storage_liquidity
 from contracts.library.position import Position, Info
 from contracts.library.fees import Fees
+from lib.cairo_math_64x61.contracts.cairo_math_64x61.math64x61 import Math64x61
 
 //
 // Internal
@@ -119,14 +126,15 @@ func _verify_length{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_
     return ();
 }
 
-// TODO: test
+// @notice Verify instruments value is lower than 2**instrument_count
+// @param instruments The instruments updated
 func _verify_instruments{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
     instruments: felt
 ) {
     alloc_locals;
     let (count) = storage_instrument_count.read();
     let (power) = pow(2, count);
-    with_attr error_message("instruments limited to 2**instrument_count") {
+    with_attr error_message("instruments limited to 2**instrument_count - 1") {
         [range_check_ptr] = instruments;
         assert [range_check_ptr + 1] = power - 1 - instruments;
     }
