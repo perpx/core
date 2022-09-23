@@ -139,23 +139,23 @@ func _update_volatility{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_ch
     }
     let (price) = storage_oracles.read(mult);
     let (prev_price) = storage_prev_oracles.read(mult);
-    let (price64x61) = Math64x61.fromFelt(price);
-    let (prev_price64x61) = Math64x61.fromFelt(prev_price);
+    let price64x61 = Math64x61.fromFelt(price);
+    let prev_price64x61 = Math64x61.fromFelt(prev_price);
 
     // truncate by price precision (6)
     let (price64x61, _) = unsigned_div_rem(price64x61, LIQUIDITY_PRECISION);
     let (prev_price64x61, _) = unsigned_div_rem(prev_price64x61, LIQUIDITY_PRECISION);
-    let (price_return) = Math64x61.div(price64x61, prev_price64x61);
+    let price_return = Math64x61.div(price64x61, prev_price64x61);
 
-    let (log_price_return) = Math64x61.log10(price_return);
-    let (exponant) = Math64x61.fromFelt(2);
-    let (square_log_price_return) = Math64x61.pow(log_price_return, exponant);
+    let log_price_return = Math64x61.log10(price_return);
+    let exponant = Math64x61.fromFelt(2);
+    let square_log_price_return = Math64x61.pow(log_price_return, exponant);
 
     let (old_volatility) = storage_volatility.read(mult);
     let (params) = storage_margin_parameters.read(mult);
 
-    let (new_volatility) = Math64x61.mul(params.lambda, old_volatility);
-    let (new_volatility) = Math64x61.add(new_volatility, square_log_price_return);
+    let new_volatility = Math64x61.mul(params.lambda, old_volatility);
+    let new_volatility = Math64x61.add(new_volatility, square_log_price_return);
     storage_volatility.write(mult, new_volatility);
     _update_volatility(instrument_count=instrument_count - 1, mult=mult * 2);
     return ();

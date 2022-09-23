@@ -10,7 +10,11 @@ from contracts.perpx_v1_exchange.storage import (
     storage_collateral,
     storage_token,
 )
-from contracts.perpx_v1_exchange.internals import _calculate_pnl
+from contracts.perpx_v1_exchange.internals import (
+    _calculate_pnl,
+    _calculate_exit_fees,
+    _calculate_fees,
+)
 from contracts.perpx_v1_exchange.events import Trade
 from contracts.perpx_v1_instrument import update_liquidity
 from contracts.constants.perpx_constants import LIMIT
@@ -76,7 +80,7 @@ func liquidate{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
 // @param amount The change in collateral
 @external
 func add_collateral{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(amount: felt) {
-    with_attr error_message("collateral increase limited to 2**64") {
+    with_attr error_message("collateral increase limited to {LIMIT}") {
         assert [range_check_ptr] = amount - 1;
         assert [range_check_ptr + 1] = LIMIT - amount;
     }
@@ -86,7 +90,7 @@ func add_collateral{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_
     let (exchange) = get_contract_address();
     let (collateral) = storage_collateral.read(caller);
 
-    with_attr error_message("collateral limited to 2**64") {
+    with_attr error_message("collateral limited to {LIMIT}") {
         assert [range_check_ptr] = amount + collateral;
         assert [range_check_ptr + 1] = LIMIT - amount - collateral;
     }
@@ -108,15 +112,16 @@ func add_collateral{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_
 func remove_collateral{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
     amount: felt
 ) {
+    alloc_locals;
     // check the limits
-    with_attr error_message("collateral decrease limited to 2**64") {
+    with_attr error_message("collateral decrease limited to {LIMIT}") {
         assert [range_check_ptr] = amount - 1;
         assert [range_check_ptr + 1] = LIMIT - amount;
     }
     let range_check_ptr = range_check_ptr + 2;
 
     // check the user can remove this much collateral
-    let (caller) = get_caller_address();
+    let (local caller) = get_caller_address();
     let (collateral) = storage_collateral.read(caller);
     let new_collateral = collateral - amount;
 
@@ -140,7 +145,7 @@ func remove_collateral{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_che
 func add_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
     amount: felt, instrument: felt
 ) -> () {
-    with_attr error_message("liquidity increase limited to 2**64") {
+    with_attr error_message("liquidity increase limited to {LIMIT}") {
         assert [range_check_ptr] = amount - 1;
         assert [range_check_ptr + 1] = LIMIT - amount;
     }
@@ -150,7 +155,7 @@ func add_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_p
     let (exchange) = get_contract_address();
     let (stake: Stake) = storage_user_stake.read(caller, instrument);
 
-    with_attr error_message("liquidity limited to 2**64") {
+    with_attr error_message("liquidity limited to {LIMIT}") {
         assert [range_check_ptr] = amount + stake.amount;
         assert [range_check_ptr + 1] = LIMIT - amount - stake.amount;
     }
@@ -173,7 +178,7 @@ func remove_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_chec
     amount: felt, instrument: felt
 ) -> () {
     alloc_locals;
-    with_attr error_message("liquidity decrease limited to 2**64") {
+    with_attr error_message("liquidity decrease limited to {LIMIT}") {
         assert [range_check_ptr] = amount - 1;
         assert [range_check_ptr + 1] = LIMIT - amount;
     }
