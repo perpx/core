@@ -1,7 +1,7 @@
 %lang starknet
 
 from starkware.cairo.common.cairo_builtins import HashBuiltin
-from starkware.cairo.common.math import unsigned_div_rem
+from starkware.cairo.common.math import unsigned_div_rem, abs_value
 from starkware.cairo.common.pow import pow
 
 from contracts.perpx_v1_exchange.storage import (
@@ -12,10 +12,11 @@ from contracts.perpx_v1_exchange.storage import (
 )
 from contracts.perpx_v1_instrument import storage_longs, storage_shorts
 from contracts.perpx_v1_exchange.structures import Parameter
+from contracts.constants.perpx_constants import LIQUIDITY_PRECISION
 from contracts.library.vault import storage_liquidity
 from contracts.library.position import Position, Info
 from contracts.library.fees import Fees
-from lib.cairo_math_64x61.contracts.cairo_math_64x61.math64x61 import Math64x61
+from lib.cairo_math_64x61_git.contracts.cairo_math_64x61.math64x61 import Math64x61
 
 //
 // Internal
@@ -104,6 +105,61 @@ func _calculate_exit_fees{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_
     }
     let (f) = _calculate_exit_fees(owner=owner, instruments=q, mult=mult * 2);
     return (exit_fees=f);
+}
+
+// @notice Calculates the owner margin requirements
+// @dev Internal function
+// @param owner The owner of the positions
+// @param instruments The instruments traded by owner
+// @param mult The multiplication factor
+// @return margin_requirement The margin requirements of the owner
+func _calculate_margin_requirement{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    owner: felt, instruments: felt, mult
+) -> (margin_requirement: felt) {
+    alloc_locals;
+    if (instruments == 0) {
+        return (margin_requirement=0);
+    }
+    let (q, r) = unsigned_div_rem(instruments, 2);
+    if (r == 1) {
+        let (position: Info) = Position.position(owner=owner, instrument=mult);
+        let (price) = storage_oracles.read(mult);
+        let (parameters: Parameter) = storage_margin_parameters.read(mult);
+        let (volatility) = storage_volatility.read(mult);
+
+        let sigma = Math64x61.sqrt(volatility);
+        let temp = Math64x61.mul(parameters.k, sigma);
+        let temp = Math64x61.exp(temp);
+        let temp = Math64x61.sub(temp, Math64x61.ONE);
+        let limit = Math64x61.div(Math64x61.ONE, 100 * Math64x61.ONE);
+        let margin_factor = Math64x61.max(temp, limit);
+
+        let price64x61 = Math64x61.fromFelt(price);
+        let size64x61 = Math64x61.fromFelt(position.size);
+        let price64x61 = Math64x61.div(price64x61, LIQUIDITY_PRECISION * Math64x61.ONE);
+        let size64x61 = Math64x61.div(size64x61, LIQUIDITY_PRECISION * Math64x61.ONE);
+        let size64x61 = abs_value(size64x61);
+
+        let temp = Math64x61.mul(price64x61, size64x61);
+        let temp = Math64x61.mul(temp, margin_factor);
+        let margin_limit = _64x61_to_liquidity_precision(temp);
+
+        let (m) = _calculate_margin_requirement(owner=owner, instruments=q, mult=mult * 2);
+        return (margin_requirement=m + margin_limit);
+    }
+    let (m) = _calculate_margin_requirement(owner=owner, instruments=q, mult=mult * 2);
+    return (margin_requirement=m);
+}
+
+// @notice Converts a felt using signed 64.61-bit fixed point
+// @param length The length of the array
+// @param instruments The instruments updated
+func _64x61_to_liquidity_precision{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    x: felt
+) -> felt {
+    let (factor, _) = unsigned_div_rem(Math64x61.FRACT_PART, LIQUIDITY_PRECISION);
+    let (y, _) = unsigned_div_rem(x, factor);
+    return y;
 }
 
 // @notice Verify the length of the array matches the number of instruments updated
