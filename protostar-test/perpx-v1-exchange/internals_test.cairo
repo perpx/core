@@ -1,15 +1,13 @@
 %lang starknet
 
 from starkware.cairo.common.cairo_builtins import HashBuiltin
-from starkware.cairo.common.alloc import alloc
-from starkware.cairo.common.uint256 import Uint256
 from starkware.starknet.common.syscalls import get_contract_address
 
 from contracts.constants.perpx_constants import (
-    RANGE_CHECK_BOUND,
     LIMIT,
     VOLATILITY_FEE_RATE_PRECISION,
     MIN_LIQUIDITY,
+    LIQUIDITY_PRECISION,
 )
 from contracts.perpx_v1_exchange.internals import (
     _verify_length,
@@ -17,13 +15,20 @@ from contracts.perpx_v1_exchange.internals import (
     _calculate_pnl,
     _calculate_fees,
     _calculate_exit_fees,
+    _calculate_margin_requirement,
+    _64x61_to_liquidity_precision,
     storage_oracles,
 )
-from contracts.perpx_v1_exchange.storage import storage_instrument_count
+from contracts.perpx_v1_exchange.storage import (
+    storage_instrument_count,
+    storage_volatility,
+    storage_margin_parameters,
+)
 from contracts.perpx_v1_instrument import storage_longs, storage_shorts
 from contracts.library.position import storage_positions
 from contracts.library.vault import storage_liquidity
-from contracts.library.fees import Fees, storage_volatility_fee_rate
+from contracts.library.fees import storage_volatility_fee_rate
+from lib.cairo_math_64x61_git.contracts.cairo_math_64x61.math64x61 import Math64x61
 from helpers.helpers import setup_helpers
 
 //
@@ -34,6 +39,8 @@ const PRIME = 2 ** 251 + 17 * 2 ** 192 + 1;
 const OWNER = 12345;
 const ACCOUNT = 123;
 const INSTRUMENT_COUNT = 10;
+const MATH64X61_LIMIT = Math64x61.BOUND;
+const MATH64X61_FRACT_PART = Math64x61.FRACT_PART;
 
 //
 // Setup
@@ -126,7 +133,7 @@ func test_verify_instruments_limit{syscall_ptr: felt*, pedersen_ptr: HashBuiltin
 }
 
 @external
-func est_calculate_pnl{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+func test_calculate_pnl{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
     random: felt
 ) {
     alloc_locals;
@@ -388,6 +395,160 @@ func test_calculate_exit_fees_limit{
     %{
         calc_fees = context.signed_int(ids.exit_fees)
         assert fee == calc_fees, f'exit fees error, expected {fee}, got {calc_fees}'
+    %}
+    return ();
+}
+
+@external
+func test_64x61_to_liquidity_precision{
+    syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr
+}(random: felt) {
+    alloc_locals;
+    local amount;
+    %{
+        ids.amount = ids.random %(ids.MATH64X61_LIMIT - 1) + 1
+        new_amount = ids.amount // (ids.MATH64X61_FRACT_PART // ids.LIQUIDITY_PRECISION)
+    %}
+    local val = _64x61_to_liquidity_precision(x=amount);
+    %{ assert ids.val == new_amount, f'precision conversion error, expected {new_amount}, got {ids.val}' %}
+    return ();
+}
+
+@external
+func test_calculate_margin_requirement{
+    syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr
+}(random: felt) {
+    alloc_locals;
+    local instruments;
+    %{
+        from random import randint, sample, seed
+        import math
+        seed(ids.random)
+        length = ids.random % (ids.INSTRUMENT_COUNT - 1) + 1
+        sample_instruments = sample(range(0, ids.INSTRUMENT_COUNT), length)
+        ids.instruments = sum([2**x for x in sample_instruments])
+
+        prices = [randint(1, ids.LIMIT) for i in range(length)]
+        amounts = [randint(-ids.LIMIT//price, ids.LIMIT//price) for price in prices]
+        volatility = [randint(1, ids.MATH64X61_FRACT_PART//(5*10**4)) for i in range(length)]
+        parameters = [randint(1, 100*ids.MATH64X61_FRACT_PART) for i in range(length)]
+        for (i, bit) in enumerate(sample_instruments):
+            store(context.self_address, "storage_oracles", [prices[i]], key=[2**bit])
+            store(context.self_address, "storage_positions", [0, 0, amounts[i]], key=[ids.ACCOUNT, 2**bit])
+            store(context.self_address, "storage_volatility", [volatility[i]], key=[2**bit])
+            store(context.self_address, "storage_margin_parameters", [parameters[i], 0], key=[2**bit])
+    %}
+    let (local margin_requirement) = _calculate_margin_requirement(
+        owner=ACCOUNT, instruments=instruments, mult=1
+    );
+    %{
+        vols = [math.sqrt(x / 2**61) for x in volatility]
+        muls = [x * y / 2**61 for (x, y) in zip(vols, parameters)]
+        temp = [math.exp(x) - 1 for x in muls]
+        limit = [max(x, 1 / 100) for x in temp]
+        prices = [x / ids.LIQUIDITY_PRECISION for x in prices]
+        amounts = [x / ids.LIQUIDITY_PRECISION for x in amounts]
+        p_a = [x*abs(y) for (x, y) in zip(prices, amounts)]
+        margin_requirement =sum([pa * l for (pa, l) in zip(p_a, limit)]) 
+
+        max_error = 1.069e-7 * sum(p_a) * math.exp(math.floor(max(muls) * math.log2(math.exp(1)))) 
+        precision = abs(margin_requirement - ids.margin_requirement // 10**6)
+        assert precision <= 3*max_error, f'margin requirement error, expected precision of {2*max_error} dollars, got {precision}'
+    %}
+    return ();
+}
+
+@external
+func test_calculate_margin_requirement_limit{
+    syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr
+}() {
+    alloc_locals;
+    local instruments;
+    // max volatility is choosen as log(1.05)**2 ~ 0.0005 which corresponds to a price variation of 5%
+    // test case: price = LIMIT, amount = 1, volatility = 5 / 10**4, k = 100
+    %{
+        import math
+        ids.instruments = 2**ids.INSTRUMENT_COUNT - 1
+
+        price = ids.LIMIT
+        amount = 1
+        volatility = ids.MATH64X61_FRACT_PART//(5*10**4)
+        k = 100*ids.MATH64X61_FRACT_PART
+        for i in range(ids.INSTRUMENT_COUNT):
+            store(context.self_address, "storage_oracles", [price], key=[2**i])
+            store(context.self_address, "storage_positions", [0, 0, amount], key=[ids.ACCOUNT, 2**i])
+            store(context.self_address, "storage_volatility", [volatility], key=[2**i])
+            store(context.self_address, "storage_margin_parameters", [k, 0], key=[2**i])
+    %}
+    let (local margin_requirement) = _calculate_margin_requirement(
+        owner=ACCOUNT, instruments=instruments, mult=1
+    );
+    %{
+        vol = math.sqrt(volatility / 2**61)
+        mul = vol * k / 2**61
+        temp = math.exp(mul) - 1
+        limit = max(temp, 1 / 100)
+        price /= ids.LIQUIDITY_PRECISION
+        amount /= ids.LIQUIDITY_PRECISION
+        margin_requirement = price * abs(amount) * limit * ids.INSTRUMENT_COUNT
+
+        max_error = 1.069e-7 * price * abs(amount) * ids.INSTRUMENT_COUNT * math.exp(math.floor(mul * math.log2(math.exp(1)))) 
+        precision = abs(margin_requirement - ids.margin_requirement // 10**6)
+        assert precision <= 2*max_error, f'margin requirement error, expected precision of {2*max_error} dollars, got {precision}'
+    %}
+
+    // test case: price = LIMIT, amount = -1, volatility = 5 / 10**4 PRECISION, k = 100
+    %{
+        amount = -1
+        for i in range(ids.INSTRUMENT_COUNT):
+            store(context.self_address, "storage_positions", [0, 0, amount], key=[ids.ACCOUNT, 2**i])
+    %}
+    let (local margin_requirement) = _calculate_margin_requirement(
+        owner=ACCOUNT, instruments=instruments, mult=1
+    );
+    %{
+        max_error = 1.069e-7 * price * abs(amount) * ids.INSTRUMENT_COUNT * math.exp(math.floor(mul * math.log2(math.exp(1)))) 
+        precision = abs(margin_requirement - ids.margin_requirement // 10**6)
+        assert precision <= 2*max_error, f'margin requirement error, expected precision of {2*max_error} dollars, got {precision}'
+    %}
+
+    // test case: price = 1, amount = LIMIT, volatility = 5 / 10**4 PRECISION, k = 100
+    %{
+        amount = ids.LIMIT
+        price = 1
+        for i in range(ids.INSTRUMENT_COUNT):
+            store(context.self_address, "storage_oracles", [price], key=[2**i])
+            store(context.self_address, "storage_positions", [0, 0, amount], key=[ids.ACCOUNT, 2**i])
+    %}
+    let (local margin_requirement) = _calculate_margin_requirement(
+        owner=ACCOUNT, instruments=instruments, mult=1
+    );
+    %{
+        price /= ids.LIQUIDITY_PRECISION
+        amount /= ids.LIQUIDITY_PRECISION
+        margin_requirement = price * abs(amount) * limit * ids.INSTRUMENT_COUNT
+
+        max_error = 1.069e-7 * price * abs(amount) * ids.INSTRUMENT_COUNT * math.exp(math.floor(mul * math.log2(math.exp(1)))) 
+        precision = abs(margin_requirement - ids.margin_requirement // 10**6)
+        assert precision <= 2*max_error, f'margin requirement error, expected precision of {2*max_error} dollars, got {precision}'
+    %}
+
+    // test case: price = 1, amount = -LIMIT, volatility = 5 / 10**4 PRECISION, k = 100
+    %{
+        amount = -ids.LIMIT
+        for i in range(ids.INSTRUMENT_COUNT):
+            store(context.self_address, "storage_positions", [0, 0, amount], key=[ids.ACCOUNT, 2**i])
+    %}
+    let (local margin_requirement) = _calculate_margin_requirement(
+        owner=ACCOUNT, instruments=instruments, mult=1
+    );
+    %{
+        amount /= ids.LIQUIDITY_PRECISION
+        margin_requirement = price * abs(amount) * limit * ids.INSTRUMENT_COUNT
+
+        max_error = 1.069e-7 * price * abs(amount) * ids.INSTRUMENT_COUNT * math.exp(math.floor(mul * math.log2(math.exp(1)))) 
+        precision = abs(margin_requirement - ids.margin_requirement // 10**6)
+        assert precision <= 2*max_error, f'margin requirement error, expected precision of {2*max_error} dollars, got {precision}'
     %}
     return ();
 }
