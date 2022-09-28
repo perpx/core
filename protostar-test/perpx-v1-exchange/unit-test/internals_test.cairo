@@ -17,7 +17,6 @@ from contracts.perpx_v1_exchange.internals import (
     _calculate_exit_fees,
     _calculate_margin_requirement,
     _64x61_to_liquidity_precision,
-    storage_oracles,
 )
 from lib.cairo_math_64x61_git.contracts.cairo_math_64x61.math64x61 import Math64x61
 
@@ -251,11 +250,11 @@ func test_calculate_margin_requirement{
         prices = np.array(prices)/ids.LIQUIDITY_PRECISION
         amounts = np.array(amounts)/ids.LIQUIDITY_PRECISION
         size = np.multiply(prices, np.absolute(amounts))
-        margin_factor = np.multiply(volatility, k)
+        margin_factor = np.multiply(np.sqrt(volatility), k)
         margin_requirement = utils.calculate_margin_requirement(volatility, k, size)
-        max_error = 1.069e-7 * np.sum(size) * math.exp(math.floor(np.amax(margin_factor) * math.log2(math.exp(1)))) 
+        notional_size = np.sum(size)
         precision = abs(margin_requirement - ids.margin_requirement // 10**6)
-        assert precision <= 3*max_error, f'margin requirement error, expected precision of {2*max_error} dollars, got {precision}'
+        assert precision <= 1e-5 * notional_size, f'margin requirement error, expected precision under {notional_size*1e-5} dollars, got {precision}'
     %}
     return ();
 }
