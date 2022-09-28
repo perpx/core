@@ -20,7 +20,8 @@ vault_test = [
 
 ["protostar.test"]
 cairo-path = [
-    "./protostar-test/"
+    "./protostar-test/",
+    "./lib/cairo_contracts/src"
 ]
 ignore = [
     "starknet-artifacts"
