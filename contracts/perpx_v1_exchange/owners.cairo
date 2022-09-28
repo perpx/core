@@ -14,7 +14,7 @@ from contracts.perpx_v1_exchange.structures import Parameter
 from contracts.perpx_v1_exchange.internals import _verify_length, _verify_instruments
 from contracts.constants.perpx_constants import LIQUIDITY_PRECISION
 from contracts.utils.access_control import assert_only_owner
-from lib.cairo_math_64x61.contracts.cairo_math_64x61.math64x61 import Math64x61
+from lib.cairo_math_64x61_git.contracts.cairo_math_64x61.math64x61 import Math64x61
 
 //
 // OWNER
