@@ -10,7 +10,6 @@ from contracts.constants.perpx_constants import SHARE_PRECISION, LIQUIDITY_PRECI
 // Structure
 //
 struct Stake {
-    amount: felt,
     shares: felt,
     timestamp: felt,
 }
@@ -56,9 +55,7 @@ namespace Vault {
             let (factor, _) = unsigned_div_rem(SHARE_PRECISION, LIQUIDITY_PRECISION);
             let init_shares = amount * factor;
             storage_shares.write(instrument, init_shares);
-            storage_user_stake.write(
-                owner, instrument, Stake(amount=amount, shares=init_shares, timestamp=ts)
-            );
+            storage_user_stake.write(owner, instrument, Stake(shares=init_shares, timestamp=ts));
             storage_liquidity.write(instrument, new_liquidity);
             return ();
         }
@@ -66,16 +63,12 @@ namespace Vault {
         let temp = amount * shares;
         let (shares_increase, _) = unsigned_div_rem(temp, liquidity);
         tempvar new_user_shares = user_stake.shares + shares_increase;
-        tempvar new_amount = user_stake.amount + amount;
-        storage_user_stake.write(
-            owner, instrument, Stake(amount=new_amount, shares=new_user_shares, timestamp=ts)
-        );
+        storage_user_stake.write(owner, instrument, Stake(shares=new_user_shares, timestamp=ts));
 
         tempvar new_shares = shares + shares_increase;
         storage_shares.write(instrument, new_shares);
 
         storage_liquidity.write(instrument, new_liquidity);
-
         return ();
     }
 
@@ -87,28 +80,22 @@ namespace Vault {
         amount: felt, owner: felt, instrument: felt
     ) -> () {
         let (user_stake) = storage_user_stake.read(owner, instrument);
-
-        let new_amount = user_stake.amount - amount;
-        with_attr error_message("insufficient balance") {
-            assert_nn(new_amount);
-        }
-
         let (shares) = storage_shares.read(instrument);
         let (liquidity) = storage_liquidity.read(instrument);
-        let new_liquidity = liquidity - amount;
 
         let temp_user = amount * user_stake.shares;
-        let (user_shares_sub, _) = unsigned_div_rem(temp_user, user_stake.amount);
+        let (user_shares_sub, _) = unsigned_div_rem(temp_user, liquidity);
         let new_user_shares = user_stake.shares - user_shares_sub;
 
-        let temp_share = amount * shares;
-        let (pool_shares_sub, _) = unsigned_div_rem(temp_share, liquidity);
-        let new_pool_shares = shares - pool_shares_sub;
+        with_attr error_message("insufficient balance") {
+            assert_nn(new_user_shares);
+        }
+
+        let new_liquidity = liquidity - amount;
+        let new_pool_shares = shares - user_shares_sub;
 
         storage_user_stake.write(
-            owner,
-            instrument,
-            Stake(amount=new_amount, shares=new_user_shares, timestamp=user_stake.timestamp),
+            owner, instrument, Stake(shares=new_user_shares, timestamp=user_stake.timestamp)
         );
         storage_shares.write(instrument, new_pool_shares);
         storage_liquidity.write(instrument, new_liquidity);

@@ -30,3 +30,6 @@ const LIQUIDITY_PRECISION = 10 ** 6;
 
 // The precision for the volatility fees
 const VOLATILITY_FEE_RATE_PRECISION = 10 ** 4;
+
+// The maximum amount paid out to a liquidator
+const MAX_LIQUIDATOR_PAY_OUT = 10 ** 8;

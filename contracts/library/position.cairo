@@ -67,7 +67,7 @@ namespace Position {
     // @param instrument The instrument for the position
     // @param price The closing price of the position
     // @param fees The fees for closing
-    // @return delta The owner's collateral change
+    // @return delta The owner's margin change
     func close_position{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
         owner: felt, instrument: felt, price: felt, fees: felt
     ) -> (delta: felt) {
