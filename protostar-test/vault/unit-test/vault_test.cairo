@@ -66,8 +66,7 @@ func test_provide_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, rang
         shares = load(context.self_address, "storage_shares", "felt", key=[ids.INSTRUMENT])[0]
         user_stake = load(context.self_address, "storage_user_stake", "Stake", key=[ids.OWNER, ids.INSTRUMENT])
         assert (pre_shares + inc) == shares, f'shares: {pre_shares + inc} different from {shares}'
-        assert (stake[0] + ids.amount) == user_stake[0], f'user_amount: {stake[0] + ids.amount} different from {user_stake[0]}'
-        assert (stake[1] + inc) == user_stake[1], f'user_shares: {stake[1] + inc} different from {user_stake[1]}'
+        assert (stake[0] + inc) == user_stake[0], f'user_shares: {stake[0] + inc} different from {user_stake[0]}'
     %}
 
     return ();
@@ -85,7 +84,9 @@ func test_withdraw_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, ran
     Vault.provide_liquidity(amount=LIQUIDITY_INCREASE, owner=OWNER, instrument=INSTRUMENT);
     // retrieve liquidity, shares and user_shares
     %{
-        pre_liquidity = load(context.self_address, "storage_liquidity", "felt", key=[ids.INSTRUMENT])[0]
+        #modify the liquidity
+        liquidity = load(context.self_address, "storage_liquidity", "felt", key=[ids.INSTRUMENT])[0] + ids.random % ids.LIMIT + 1
+        store(context.self_address, "storage_liquidity", [liquidity], key=[ids.INSTRUMENT])
         pre_shares = load(context.self_address, "storage_shares", "felt", key=[ids.INSTRUMENT])[0]
         stake = load(context.self_address, "storage_user_stake", "Stake", key=[ids.OWNER, ids.INSTRUMENT])
     %}
@@ -96,11 +97,9 @@ func test_withdraw_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, ran
         shares = load(context.self_address, "storage_shares", "felt", key=[ids.INSTRUMENT])[0]
         user_stake = load(context.self_address, "storage_user_stake", "Stake", key=[ids.OWNER, ids.INSTRUMENT])
 
-        share_dec = ids.amount * pre_shares // pre_liquidity
-        user_share_dec = ids.amount * stake[1] // stake[0]
+        share_dec = ids.amount * stake[0] // liquidity
         assert (pre_shares - share_dec) == shares,  f'shares: {pre_shares - share_dec} different from {shares}'
-        assert (stake[0] - ids.amount) == user_stake[0],  f'user_amount: {stake[0] - ids.amount} different from {user_stake[0]}'
-        assert (stake[1] - user_share_dec) == user_stake[1],  f'user_shares: {stake[1] - user_share_dec} different from {user_stake[1]}'
+        assert (stake[0] - share_dec) == user_stake[0],  f'user_shares: {stake[0] - share_dec} different from {user_stake[0]}'
     %}
     return ();
 }
