@@ -47,7 +47,7 @@ func test_provide_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, rang
 ) {
     alloc_locals;
     local amount;
-    %{ ids.amount = ids.random % ids.LIMIT + 1 %}
+    %{ ids.amount = ids.random % (ids.LIMIT//100)+ 1 %}
     // retrieve liquidity, shares and user_shares
     %{
         pre_liquidity = load(context.self_address, "storage_liquidity", "felt", key=[ids.INSTRUMENT])[0]
