@@ -41,7 +41,7 @@ func __setup__{syscall_ptr: felt*}() {
         context.self_address = ids.address
         store(ids.address, "storage_liquidity", [ids.INITIAL_LIQUIDITY], key=[ids.INSTRUMENT])
         store(ids.address, "storage_shares", [ids.INITIAL_SHARES], key=[ids.INSTRUMENT])
-        store(ids.address, "storage_user_stake", [ids.INITIAL_USER_LIQUIDITY, ids.INITIAL_USER_SHARES, 0], key=[ids.OWNER, ids.INSTRUMENT])
+        store(ids.address, "storage_user_stake", [ids.INITIAL_USER_SHARES, 0], key=[ids.OWNER, ids.INSTRUMENT])
         store(ids.address, "storage_longs", [ids.INITIAL_LONGS], key=[ids.INSTRUMENT])
         store(ids.address, "storage_shorts", [ids.INITIAL_SHORTS], key=[ids.INSTRUMENT])
     %}
@@ -66,12 +66,10 @@ func test_update_liquidity_negative{
 
         amount = context.signed_int(ids.amount)
         share_dec = amount * ids.INITIAL_SHARES // ids.INITIAL_LIQUIDITY
-        user_share_dec = amount * ids.INITIAL_USER_SHARES // ids.INITIAL_USER_LIQUIDITY
 
         assert(ids.INITIAL_LIQUIDITY + amount == liquidity), f'liquidity error: {ids.INITIAL_LIQUIDITY + amount} different from {liquidity}'
         assert(ids.INITIAL_SHARES + share_dec == shares), f'shares error: {ids.INITIAL_SHARES + share_dec} different from {shares}'
-        assert(ids.INITIAL_USER_LIQUIDITY + amount == user_stake[0]), f'user_amount error: {ids.INITIAL_USER_LIQUIDITY + amount} different from {user_stake[0]}'
-        assert(ids.INITIAL_USER_SHARES + user_share_dec == user_stake[1]), f'user_shares error: {ids.INITIAL_USER_SHARES + user_share_dec} different from {user_stake[1]}'
+        assert(ids.INITIAL_USER_SHARES + share_dec == user_stake[0]), f'user_shares error: {ids.INITIAL_USER_SHARES + share_dec} different from {user_stake[0]}'
     %}
     return ();
 }
@@ -91,13 +89,11 @@ func test_update_liquidity_positive{
         user_stake = load(context.self_address, "storage_user_stake", "Stake", key=[ids.OWNER, ids.INSTRUMENT])
 
         amount = context.signed_int(ids.amount)
-        share_dec = amount * ids.INITIAL_SHARES // ids.INITIAL_LIQUIDITY
-        user_share_dec = amount * ids.INITIAL_USER_SHARES // ids.INITIAL_USER_LIQUIDITY
+        share_inc = amount * ids.INITIAL_SHARES // ids.INITIAL_LIQUIDITY
 
         assert(ids.INITIAL_LIQUIDITY + amount == liquidity), f'liquidity error: {ids.INITIAL_LIQUIDITY + amount} different from {liquidity}'
-        assert(ids.INITIAL_SHARES + share_dec == shares), f'shares error: {ids.INITIAL_SHARES + share_dec} different from {shares}'
-        assert(ids.INITIAL_USER_LIQUIDITY + amount == user_stake[0]), f'user_amount error: {ids.INITIAL_USER_LIQUIDITY + amount} different from {user_stake[0]}'
-        assert(ids.INITIAL_USER_SHARES + user_share_dec == user_stake[1]), f'user_shares error: {ids.INITIAL_USER_SHARES + user_share_dec} different from {user_stake[1]}'
+        assert(ids.INITIAL_SHARES + share_inc == shares), f'shares error: {ids.INITIAL_SHARES + share_inc} different from {shares}'
+        assert(ids.INITIAL_USER_SHARES + share_inc == user_stake[0]), f'user_shares error: {ids.INITIAL_USER_SHARES + share_inc} different from {user_stake[0]}'
     %}
     return ();
 }
@@ -108,7 +104,7 @@ func test_update_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range
 ) {
     alloc_locals;
     local amount;
-    %{ ids.amount = ids.random % ids.LIMIT + 1 if ids.random < ids.LIMIT else PRIME - ids.random % ids.INITIAL_USER_LIQUIDITY - 1 %}
+    %{ ids.amount = ids.random % (ids.LIMIT//100) + 1 if ids.random < PRIME/2 else PRIME - ids.random % ids.INITIAL_USER_LIQUIDITY - 1 %}
 
     update_liquidity(amount=amount, owner=OWNER, instrument=INSTRUMENT);
 
@@ -120,14 +116,11 @@ func test_update_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range
 
         amount = context.signed_int(ids.amount)
         share_inc = amount * ids.INITIAL_SHARES
-        user_share_inc = amount * ids.INITIAL_USER_SHARES
         share_inc = share_inc // ids.INITIAL_LIQUIDITY if share_inc > 0 else math.ceil(share_inc/ids.INITIAL_LIQUIDITY)
-        user_share_inc = user_share_inc // ids.INITIAL_USER_LIQUIDITY if user_share_inc > 0 else math.ceil(user_share_inc/ids.INITIAL_USER_LIQUIDITY)
 
         assert(ids.INITIAL_LIQUIDITY + amount == liquidity), f'liquidity error: {ids.INITIAL_LIQUIDITY + amount} different from {liquidity}'
         assert(ids.INITIAL_SHARES + share_inc == shares), f'shares error: {ids.INITIAL_SHARES + share_inc} different from {shares}'
-        assert(ids.INITIAL_USER_LIQUIDITY + amount == user_stake[0]), f'user_amount error: {ids.INITIAL_USER_LIQUIDITY + amount} different from {user_stake[0]}'
-        assert(ids.INITIAL_USER_SHARES + user_share_inc == user_stake[1]), f'user_shares error: {ids.INITIAL_USER_SHARES + user_share_inc} different from {user_stake[1]}'
+        assert(ids.INITIAL_USER_SHARES + share_inc == user_stake[0]), f'user_shares error: {ids.INITIAL_USER_SHARES + share_inc} different from {user_stake[0]}'
     %}
     return ();
 }
