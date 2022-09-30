@@ -97,7 +97,7 @@ func test_withdraw_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, ran
         shares = load(context.self_address, "storage_shares", "felt", key=[ids.INSTRUMENT])[0]
         user_stake = load(context.self_address, "storage_user_stake", "Stake", key=[ids.OWNER, ids.INSTRUMENT])
 
-        share_dec = ids.amount * stake[0] // liquidity
+        share_dec = ids.amount * pre_shares // liquidity
         assert (pre_shares - share_dec) == shares,  f'shares: {pre_shares - share_dec} different from {shares}'
         assert (stake[0] - share_dec) == user_stake[0],  f'user_shares: {stake[0] - share_dec} different from {user_stake[0]}'
     %}
