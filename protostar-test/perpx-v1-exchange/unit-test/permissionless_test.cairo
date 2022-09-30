@@ -82,29 +82,37 @@ func test_add_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_ch
 ) {
     alloc_locals;
     local address;
-    local amount;
+    local amount_1;
+    local amount_2;
     %{ ids.address = context.self_address %}
 
     // prank the approval and the add liquidity calls
     %{
-        ids.amount = ids.random % ids.LIMIT + 1
-        stop_prank_callable = start_prank(ids.ACCOUNT)
+        ids.amount_1 = ids.random % (ids.LIMIT//100) + 1
+        ids.amount_2 = ids.random % (ids.LIMIT//100 - ids.amount_1) + 1
+        start_prank(ids.ACCOUNT)
     %}
-    ERC20.approve(spender=address, amount=Uint256(amount, 0));
+    ERC20.approve(spender=address, amount=Uint256(2 * LIMIT, 0));
 
     // add liquidity
-    add_liquidity(amount=amount, instrument=INSTRUMENT);
+    add_liquidity(amount=amount_1, instrument=INSTRUMENT);
 
     %{
-        stop_prank_callable() 
         user_stake = load(context.self_address, "storage_user_stake", "Stake", key=[ids.ACCOUNT, ids.INSTRUMENT])
         account_balance = load(context.self_address, "ERC20_balances", "Uint256", key=[ids.ACCOUNT])
         exchange_balance = load(context.self_address, "ERC20_balances", "Uint256", key=[ids.address])
 
-        assert user_stake[0] == ids.amount, f'user stake amount error, expected {ids.amount}, got {user_stake[0]}'
-        assert user_stake[1] == ids.amount*100, f'user stake shares error, expected {ids.amount * 100}, got {user_stake[1]}'
-        assert account_balance == [ids.RANGE_CHECK_BOUND-1-ids.amount, 0], f'account balance error, expected [{ids.RANGE_CHECK_BOUND-1-ids.amount}, 0] got {account_balance}'
-        assert exchange_balance == [ids.amount, 0], f'exchange balance error, expected [{ids.amount}, 0] got {exchange_balance}'
+        assert user_stake[0] == ids.amount_1*100, f'user stake shares error, expected {ids.amount_1 * 100}, got {user_stake[0]}'
+        assert account_balance == [ids.RANGE_CHECK_BOUND-1-ids.amount_1, 0], f'account balance error, expected [{ids.RANGE_CHECK_BOUND-1-ids.amount_1}, 0] got {account_balance}'
+        assert exchange_balance == [ids.amount_1, 0], f'exchange balance error, expected [{ids.amount_1}, 0] got {exchange_balance}'
+    %}
+
+    // add liquidity
+    add_liquidity(amount=amount_2, instrument=INSTRUMENT);
+    %{
+        stake = load(context.self_address, "storage_user_stake", "Stake", key=[ids.ACCOUNT, ids.INSTRUMENT])
+
+        assert stake[0] == user_stake[0] + ids.amount_2*user_stake[0]//ids.amount_1, f'user stake shares error, expected {user_stake[0] + ids.amount_2*user_stake[0]//ids.amount_1}, got {stake[0]}'
     %}
 
     return ();
@@ -125,7 +133,7 @@ func test_remove_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range
     // prank the approval and the add liquidity calls
     %{
         stop_prank_callable = start_prank(ids.ACCOUNT)
-        ids.provide_amount = ids.provide_random % ids.LIMIT + 1
+        ids.provide_amount = ids.provide_random % (ids.LIMIT//100) + 1
         ids.remove_amount = ids.remove_random % ids.provide_amount + 1
     %}
     ERC20.approve(spender=address, amount=Uint256(provide_amount, 0));
@@ -137,11 +145,9 @@ func test_remove_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range
     remove_liquidity(amount=remove_amount, instrument=INSTRUMENT);
     %{
         user_stake = load(ids.address, "storage_user_stake", "Stake", key=[ids.ACCOUNT, ids.INSTRUMENT])
-        diff = ids.provide_amount - ids.remove_amount
-        shares = 100*(ids.provide_amount - ids.remove_amount)
+        shares = 100*(ids.provide_amount - ids.remove_amount) # share change = initial shares - remove shares = 100*provide - remove*100*provide/provide
 
-        assert user_stake[0] == diff, f'user stake amount error, expected {diff}, got {user_stake[0]}'
-        assert user_stake[1] == shares, f'user stake shares error, expected {shares}, got {user_stake[1]}'
+        assert user_stake[0] == shares, f'user stake shares error, expected {shares}, got {user_stake[0]}'
     %}
 
     return ();

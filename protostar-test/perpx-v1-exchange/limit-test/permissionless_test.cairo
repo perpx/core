@@ -75,15 +75,19 @@ func __setup__{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
 func test_add_liquidity_limit{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
     alloc_locals;
     local address;
+    local amount;
     %{ ids.address = context.self_address %}
 
-    // test case: amount = LIMIT
+    // test case: amount = LIMIT//100+1
     // prank the approval and the add liquidity calls
-    %{ start_prank(ids.ACCOUNT) %}
+    %{
+        ids.amount = ids.LIMIT//100+1
+        start_prank(ids.ACCOUNT)
+    %}
     ERC20.approve(spender=address, amount=Uint256(2 * LIMIT + 1, 0));
 
-    %{ expect_revert(error_message=f'liquidity increase limited to {ids.LIMIT}') %}
-    add_liquidity(amount=LIMIT + 1, instrument=INSTRUMENT);
+    %{ expect_revert(error_message=f'shares limited to {ids.LIMIT}') %}
+    add_liquidity(amount=amount, instrument=INSTRUMENT);
     return ();
 }
 
@@ -94,17 +98,21 @@ func test_remove_liquidity_limit{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*,
     ) {
     alloc_locals;
     local address;
+    local amount;
     %{ ids.address = context.self_address %}
 
-    // test case: amount = LIMIT
+    // test case: amount = LIMIT//100
     // prank the approval and the add liquidity calls
-    %{ stop_prank_callable = start_prank(ids.ACCOUNT) %}
+    %{
+        ids.amount = ids.LIMIT//100
+        stop_prank_callable = start_prank(ids.ACCOUNT)
+    %}
     ERC20.approve(spender=address, amount=Uint256(2 * LIMIT, 0));
-    add_liquidity(amount=LIMIT, instrument=INSTRUMENT);
+    add_liquidity(amount=amount, instrument=INSTRUMENT);
 
     // remove the liquidity
-    remove_liquidity(amount=LIMIT, instrument=INSTRUMENT);
-    add_liquidity(amount=LIMIT, instrument=INSTRUMENT);
+    remove_liquidity(amount=amount, instrument=INSTRUMENT);
+    add_liquidity(amount=amount, instrument=INSTRUMENT);
 
     // test case: amount = 0
     // remove the liquidity
