@@ -94,16 +94,16 @@ namespace Vault {
         let (shares) = storage_shares.read(instrument);
         let (liquidity) = storage_liquidity.read(instrument);
 
-        let temp_user = amount * user_stake.shares;
-        let (user_shares_sub, _) = unsigned_div_rem(temp_user, liquidity);
-        let new_user_shares = user_stake.shares - user_shares_sub;
+        let temp_user = amount * shares;
+        let (shares_sub, _) = unsigned_div_rem(temp_user, liquidity);
+        let new_user_shares = user_stake.shares - shares_sub;
 
         with_attr error_message("insufficient balance") {
             assert_nn(new_user_shares);
         }
 
         let new_liquidity = liquidity - amount;
-        let new_pool_shares = shares - user_shares_sub;
+        let new_pool_shares = shares - shares_sub;
 
         storage_user_stake.write(
             owner, instrument, Stake(shares=new_user_shares, timestamp=user_stake.timestamp)
