@@ -2,7 +2,8 @@
 
 from starkware.cairo.common.cairo_builtins import HashBuiltin
 from starkware.starknet.common.syscalls import get_caller_address, get_contract_address
-from starkware.cairo.common.math import assert_le
+from starkware.cairo.common.math import assert_le, unsigned_div_rem
+from starkware.cairo.common.math_cmp import is_nn, is_le
 from starkware.cairo.common.uint256 import Uint256
 
 from contracts.perpx_v1_exchange.storage import (
@@ -17,9 +18,15 @@ from contracts.perpx_v1_exchange.internals import (
     _calculate_fees,
     _calculate_margin_requirement,
 )
-from contracts.perpx_v1_exchange.events import Trade
+from contracts.constants.perpx_constants import (
+    LIMIT,
+    MAX_LIQUIDATOR_PAY_OUT,
+    MIN_LIQUIDATOR_PAY_OUT,
+)
 from contracts.perpx_v1_instrument import update_liquidity
-from contracts.constants.perpx_constants import LIMIT
+from contracts.perpx_v1_exchange.events import Liquidate, Trade
+from contracts.library.position import Position, Info
+from contracts.library.vault import storage_liquidity
 from contracts.library.vault import Stake, storage_user_stake
 
 //
@@ -134,6 +141,7 @@ func remove_collateral{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_che
         assert [range_check_ptr] = new_collateral;
     }
     let range_check_ptr = range_check_ptr + 1;
+
     // check the user is not exposed by removing this much collateral
     // (collateral_remaining + PnL - fees - exit_imbalance_fees) > Sum(value_at_risk*k*sigma)
     let (instruments) = storage_user_instruments.read(caller);
@@ -174,9 +182,10 @@ func add_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_p
     let (exchange) = get_contract_address();
     let (stake: Stake) = storage_user_stake.read(caller, instrument);
 
+    let (liquidity) = storage_liquidity.read(instrument);
     with_attr error_message("liquidity limited to {limit}") {
-        assert [range_check_ptr] = amount + stake.amount;
-        assert [range_check_ptr + 1] = LIMIT - amount - stake.amount;
+        assert [range_check_ptr] = amount + liquidity;
+        assert [range_check_ptr + 1] = LIMIT - amount - liquidity;
     }
     let range_check_ptr = range_check_ptr + 2;
 
