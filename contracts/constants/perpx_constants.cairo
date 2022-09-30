@@ -33,3 +33,6 @@ const VOLATILITY_FEE_RATE_PRECISION = 10 ** 4;
 
 // The maximum amount paid out to a liquidator
 const MAX_LIQUIDATOR_PAY_OUT = 10 ** 8;
+
+// The minimum amount paid out to a liquidator
+const MIN_LIQUIDATOR_PAY_OUT = 10 ** 7;

@@ -4,7 +4,7 @@ from starkware.cairo.common.cairo_builtins import HashBuiltin
 from starkware.cairo.common.math import unsigned_div_rem, assert_nn
 from starkware.starknet.common.syscalls import get_block_timestamp
 
-from contracts.constants.perpx_constants import SHARE_PRECISION, LIQUIDITY_PRECISION
+from contracts.constants.perpx_constants import SHARE_PRECISION, LIQUIDITY_PRECISION, LIMIT
 
 //
 // Structure
@@ -43,6 +43,7 @@ namespace Vault {
         amount: felt, owner: felt, instrument: felt
     ) -> () {
         alloc_locals;
+        local limit = LIMIT;
 
         let (shares) = storage_shares.read(instrument);
         let (user_stake) = storage_user_stake.read(owner, instrument);
@@ -54,6 +55,11 @@ namespace Vault {
         if (shares == 0) {
             let (factor, _) = unsigned_div_rem(SHARE_PRECISION, LIQUIDITY_PRECISION);
             let init_shares = amount * factor;
+            with_attr error_message("shares limited to {limit}") {
+                assert [range_check_ptr] = init_shares;
+                assert [range_check_ptr + 1] = LIMIT - init_shares;
+            }
+            let range_check_ptr = range_check_ptr + 2;
             storage_shares.write(instrument, init_shares);
             storage_user_stake.write(owner, instrument, Stake(shares=init_shares, timestamp=ts));
             storage_liquidity.write(instrument, new_liquidity);
@@ -63,10 +69,15 @@ namespace Vault {
         let temp = amount * shares;
         let (shares_increase, _) = unsigned_div_rem(temp, liquidity);
         tempvar new_user_shares = user_stake.shares + shares_increase;
-        storage_user_stake.write(owner, instrument, Stake(shares=new_user_shares, timestamp=ts));
-
         tempvar new_shares = shares + shares_increase;
+        with_attr error_message("shares limited to {limit}") {
+            assert [range_check_ptr] = new_shares;
+            assert [range_check_ptr + 1] = LIMIT - new_shares;
+        }
+        let range_check_ptr = range_check_ptr + 2;
+
         storage_shares.write(instrument, new_shares);
+        storage_user_stake.write(owner, instrument, Stake(shares=new_user_shares, timestamp=ts));
 
         storage_liquidity.write(instrument, new_liquidity);
         return ();
