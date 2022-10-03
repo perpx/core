@@ -2,7 +2,7 @@
 
 from starkware.cairo.common.cairo_builtins import HashBuiltin
 from starkware.starknet.common.syscalls import get_caller_address, get_contract_address
-from starkware.cairo.common.math import assert_le, unsigned_div_rem
+from starkware.cairo.common.math import assert_le, unsigned_div_rem, signed_div_rem
 from starkware.cairo.common.math_cmp import is_nn, is_le
 from starkware.cairo.common.uint256 import Uint256
 
@@ -20,6 +20,7 @@ from contracts.perpx_v1_exchange.internals import (
 )
 from contracts.constants.perpx_constants import (
     LIMIT,
+    MAX_BOUND,
     MAX_LIQUIDATOR_PAY_OUT,
     MIN_LIQUIDATOR_PAY_OUT,
 )
@@ -76,7 +77,7 @@ func close{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(inst
 
 // @notice Liquidate all positions of owner
 // @param owner The owner of the positions
-// TODO update
+@external
 func liquidate{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(owner: felt) {
     // check the user is exposed
     // (collateral_remaining + PnL - fees - exit_imbalance_fees) > Sum(value_at_risk*k*sigma)
