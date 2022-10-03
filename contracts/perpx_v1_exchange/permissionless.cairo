@@ -78,10 +78,130 @@ func close{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(inst
 // @param owner The owner of the positions
 // TODO update
 func liquidate{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(owner: felt) {
-    // let (_price) = storage_price.read()
-    // let (_fee) = storage_fee.read()
-    // let (_delta) = liquidate_position(address=owner, price=_price, fee_bps=_fee)
-    // Liquidate.emit(owner=owner, price=_price, fee=_fee, delta=_delta)
+    // check the user is exposed
+    // (collateral_remaining + PnL - fees - exit_imbalance_fees) > Sum(value_at_risk*k*sigma)
+    alloc_locals;
+    let (collateral) = storage_collateral.read(owner);
+    let (local instruments) = storage_user_instruments.read(owner);
+
+    let (exit_fees) = _calculate_exit_fees(owner=owner, instruments=instruments, mult=1);
+    let (fees) = _calculate_fees(owner=owner, instruments=instruments, mult=1);
+    let (pnl) = _calculate_pnl(owner=owner, instruments=instruments, mult=1);
+
+    tempvar margin = collateral + pnl - fees - exit_fees;
+    let (min_margin) = _calculate_margin_requirement(owner=owner, instruments=instruments, mult=1);
+
+    with_attr error_message("cannot liquidate user, margin > min_margin") {
+        assert_le(margin, min_margin - 1);
+    }
+
+    let (instrument_count) = _close_all_positions(
+        owner=owner, instruments=instruments, instrument_count=0, mult=1
+    );
+
+    let (caller) = get_caller_address();
+    let (token_address) = storage_token.read();
+    let is_positive = is_nn(margin);
+
+    if (is_positive == 1) {
+        let is_ge_max_payout = is_le(MAX_LIQUIDATOR_PAY_OUT, margin);
+        if (is_ge_max_payout == 1) {
+            // if margin > MAX_LIQUIDATOR_PAY_OUT, distribute remainder to pools
+            tempvar remainder = margin - MAX_LIQUIDATOR_PAY_OUT;
+            let (q, r) = unsigned_div_rem(remainder, instrument_count);
+            _divide_margin(amount=q, instruments=instruments, mult=1);
+            IERC20.transfer(
+                contract_address=token_address,
+                recipient=caller,
+                amount=Uint256(MAX_LIQUIDATOR_PAY_OUT + r, 0),
+            );
+            Liquidate.emit(owner=owner, instruments=instruments);
+            return ();
+        }
+
+        let is_ge_min_payout = is_le(MIN_LIQUIDATOR_PAY_OUT, margin);
+        if (is_ge_min_payout == 1) {
+            // if MIN_LIQUIDATOR_PAY_OUT < margin < MAX_LIQUIDATOR_PAY_OUT,
+            // send all to keeper bot.
+            IERC20.transfer(
+                contract_address=token_address, recipient=caller, amount=Uint256(margin, 0)
+            );
+            Liquidate.emit(owner=owner, instruments=instruments);
+            return ();
+        }
+        // If 0 < margin < MIN_LIQUIDATOR_PAY_OUT, send MLPAY.
+        tempvar remainder = MIN_LIQUIDATOR_PAY_OUT - margin;
+        let (q, r) = unsigned_div_rem(remainder, instrument_count);
+        _divide_margin(amount=-q, instruments=instruments, mult=1);
+        IERC20.transfer(
+            contract_address=token_address,
+            recipient=caller,
+            amount=Uint256(MIN_LIQUIDATOR_PAY_OUT - r, 0),
+        );
+        Liquidate.emit(owner=owner, instruments=instruments);
+        return ();
+    } else {
+        // if margin < 0, send minimum reward to keeper bot and distribute looses on pools
+        let (q, r) = signed_div_rem(margin, instrument_count, MAX_BOUND);
+        _divide_margin(amount=q, instruments=instruments, mult=1);
+        IERC20.transfer(
+            contract_address=token_address,
+            recipient=caller,
+            amount=Uint256(MIN_LIQUIDATOR_PAY_OUT - r, 0),
+        );
+        Liquidate.emit(owner=owner, instruments=instruments);
+        return ();
+    }
+}
+
+// @notice Closes all the users positions
+// @param owner The owner of the positions
+// @param instruments The instruments owned by the owner
+// @param instrument_count The count of instruments
+// @param mult The multiplication factor
+func _close_all_positions{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    owner: felt, instruments: felt, instrument_count: felt, mult: felt
+) -> (instrument_count: felt) {
+    alloc_locals;
+    if (instruments == 0) {
+        return (instrument_count=instrument_count);
+    }
+    let (q, r) = unsigned_div_rem(instruments, 2);
+    if (r == 1) {
+        let (price) = storage_oracles.read(instrument=mult);
+        let (_) = Position.close_position(owner=owner, instrument=mult, price=price, fees=0);
+
+        let (count) = _close_all_positions(
+            owner=owner, instruments=q, instrument_count=instrument_count + 1, mult=mult * 2
+        );
+        return (instrument_count=count);
+    }
+    let (count) = _close_all_positions(
+        owner=owner, instruments=q, instrument_count=instrument_count, mult=mult * 2
+    );
+    return (instrument_count=count);
+}
+
+// @notice Divides margin accross the instruments
+// @param amount The amount to change the liquidity by
+// @param instruments The instruments owned by the owner
+// @param mult The multiplication factor
+// TODO add way to determine if margin substraction was successful
+func _divide_margin{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    amount: felt, instruments: felt, mult: felt
+) {
+    alloc_locals;
+    if (instruments == 0) {
+        return ();
+    }
+    let (q, r) = unsigned_div_rem(instruments, 2);
+    if (r == 1) {
+        let (liquidity) = storage_liquidity.read(mult);
+        storage_liquidity.write(mult, liquidity + amount);
+        _divide_margin(amount=amount, instruments=q, mult=mult * 2);
+        return ();
+    }
+    _divide_margin(amount=amount, instruments=q, mult=mult * 2);
     return ();
 }
 
