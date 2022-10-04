@@ -18,6 +18,7 @@ from contracts.perpx_v1_exchange.internals import (
     _calculate_margin_requirement,
     _64x61_to_liquidity_precision,
     _divide_margin,
+    _close_all_positions,
 )
 from lib.cairo_math_64x61_git.contracts.cairo_math_64x61.math64x61 import Math64x61
 
@@ -260,6 +261,39 @@ func test_calculate_margin_requirement{
     return ();
 }
 
+// TEST CLOSE ALL POSITIONS
+
+@external
+func test_close_all_positions{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    random: felt
+) {
+    alloc_locals;
+    local instruments;
+    %{
+        from random import randint, sample, seed
+        seed(ids.random)
+        length = ids.random % ids.INSTRUMENT_COUNT + 1
+        sample_instruments = sample(range(0, ids.INSTRUMENT_COUNT), length)
+        ids.instruments = sum([2**x for x in sample_instruments])
+
+        sizes = [randint(-ids.LIMIT, ids.LIMIT) for i in range(length)]
+        fees = [randint(-ids.LIMIT, ids.LIMIT) for i in range(length)]
+        costs = [randint(-ids.LIMIT, ids.LIMIT) for i in range(length)]
+        for (i, bit) in enumerate(sample_instruments):
+            store(context.self_address, "storage_positions", [fees[i], costs[i], sizes[i]], key=[ids.ACCOUNT, 2**bit])
+    %}
+    let (instrument_count) = _close_all_positions(
+        owner=ACCOUNT, instruments=instruments, instrument_count=0, mult=1
+    );
+    %{
+        assert ids.instrument_count == len(sample_instruments), f'instrument count error, expected {len(sample_instruments)}, got {ids.instrument_count}'
+        for bit in sample_instruments:
+            pos = load(context.self_address, "storage_positions", "Info", key=[ids.ACCOUNT, 2**bit])
+            assert pos == [0, 0, 0], f'position error, expected [0, 0, 0], got {pos}'
+    %}
+    return ();
+}
+
 // TEST DIVIDE MARGIN
 
 @external
@@ -272,7 +306,6 @@ func test_divide_margin{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_ch
     local instruments;
     %{
         from random import randint, sample, seed
-        import numpy as np
         seed(ids.random)
         length = ids.random % ids.INSTRUMENT_COUNT + 1
         sample_instruments = sample(range(0, ids.INSTRUMENT_COUNT), length)
