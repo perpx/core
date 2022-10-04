@@ -340,7 +340,8 @@ func test_liquidate_negative_margin{
             position = load(context.self_address, "storage_positions", "Info", key=[ids.ACCOUNT, 2**bit])
             new_liquidity = utils.signed_int(load(context.self_address, "storage_liquidity", "felt", key=[2**bit])[0])
             assert position == [0, 0, 0], f'position error, expected [0, 0, 0], got {position}'
-            assert liquidity[i] + liquidity_change == new_liquidity, f'liquidity error, expected {liquidity[i] + liquidity_change}, got {new_liquidity}'
+            liq = liquidity[i] + liquidity_change if liquidity[i] + liquidity_change > 0 else 0
+            assert liq == new_liquidity, f'liquidity error, expected {liq}, got {new_liquidity}'
     %}
     return ();
 }
