@@ -2,6 +2,7 @@
 
 from starkware.cairo.common.cairo_builtins import HashBuiltin
 from starkware.cairo.common.math import unsigned_div_rem, abs_value
+from starkware.cairo.common.math_cmp import is_nn
 from starkware.cairo.common.pow import pow
 
 from contracts.perpx_v1_exchange.storage import (
@@ -196,4 +197,67 @@ func _verify_instruments{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_c
     }
     let range_check_ptr = range_check_ptr + 2;
     return ();
+}
+
+// @notice Closes all the users positions
+// @param owner The owner of the positions
+// @param instruments The instruments owned by the owner
+// @param instrument_count The count of instruments
+// @param mult The multiplication factor
+func _close_all_positions{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    owner: felt, instruments: felt, instrument_count: felt, mult: felt
+) -> (instrument_count: felt) {
+    alloc_locals;
+    if (instruments == 0) {
+        return (instrument_count=instrument_count);
+    }
+    let (q, r) = unsigned_div_rem(instruments, 2);
+    if (r == 1) {
+        let (price) = storage_oracles.read(instrument=mult);
+        let (_) = Position.close_position(owner=owner, instrument=mult, price=price, fees=0);
+
+        let (count) = _close_all_positions(
+            owner=owner, instruments=q, instrument_count=instrument_count + 1, mult=mult * 2
+        );
+        return (instrument_count=count);
+    }
+    let (count) = _close_all_positions(
+        owner=owner, instruments=q, instrument_count=instrument_count, mult=mult * 2
+    );
+    return (instrument_count=count);
+}
+
+// @notice Divides margin accross the instruments
+// @param total The absolute total amount of liquidity to spread on instruments
+// @param amount The amount to change the liquidity by
+// @param instruments The instruments owned by the owner
+// @param mult The multiplication factor
+// @return The leftover margin
+func _divide_margin{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    total: felt, amount: felt, instruments: felt, mult: felt
+) -> felt {
+    alloc_locals;
+    if (instruments == 0) {
+        return total;
+    }
+    let (q, r) = unsigned_div_rem(instruments, 2);
+    if (r == 1) {
+        let (liquidity) = storage_liquidity.read(mult);
+        let is_negative = is_nn(liquidity + amount);
+        if (is_negative == 0) {
+            storage_liquidity.write(mult, 0);
+            let t = _divide_margin(
+                total=total - liquidity, amount=amount, instruments=q, mult=mult * 2
+            );
+            return t;
+        }
+        storage_liquidity.write(mult, liquidity + amount);
+        let abs_amount = abs_value(amount);
+        let t = _divide_margin(
+            total=total - abs_amount, amount=amount, instruments=q, mult=mult * 2
+        );
+        return t;
+    }
+    let t = _divide_margin(total=total, amount=amount, instruments=q, mult=mult * 2);
+    return t;
 }
