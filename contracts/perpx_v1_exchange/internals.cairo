@@ -213,8 +213,7 @@ func _close_all_positions{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_
     }
     let (q, r) = unsigned_div_rem(instruments, 2);
     if (r == 1) {
-        let (price) = storage_oracles.read(instrument=mult);
-        let (_) = Position.close_position(owner=owner, instrument=mult, price=price, fees=0);
+        let (_) = Position.close_position(owner=owner, instrument=mult, price=0, fees=0);
 
         let (count) = _close_all_positions(
             owner=owner, instruments=q, instrument_count=instrument_count + 1, mult=mult * 2
