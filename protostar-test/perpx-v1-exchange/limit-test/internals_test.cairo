@@ -17,8 +17,9 @@ from contracts.perpx_v1_exchange.internals import (
     _calculate_exit_fees,
     _calculate_margin_requirement,
     _64x61_to_liquidity_precision,
-    storage_oracles,
+    _divide_margin,
 )
+from contracts.perpx_v1_exchange.storage import storage_oracles
 from lib.cairo_math_64x61_git.contracts.cairo_math_64x61.math64x61 import Math64x61
 
 //
@@ -337,5 +338,30 @@ func test_calculate_margin_requirement_limit{
         precision = abs(margin_requirement - ids.margin_requirement // 10**6)
         assert precision <= 2*max_error, f'margin requirement error, expected precision of {2*max_error} dollars, got {precision}'
     %}
+    return ();
+}
+
+// TEST DIVIDE MARGIN
+
+@external
+func test_divide_margin{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    // test case: amount = LIMIT
+    alloc_locals;
+    local instruments;
+    %{ ids.instruments = sum([2**i for i in range(10)]) %}
+    let rest = _divide_margin(
+        total=LIMIT * INSTRUMENT_COUNT, amount=LIMIT, instruments=instruments, mult=1
+    );
+    assert rest = 0;
+    %{
+        # reset liquidity
+        for i in range(10): 
+            store(context.self_address, "storage_liquidity", [0], key=[2**i])
+    %}
+    // test case: amount = -LIMIT
+    let rest = _divide_margin(
+        total=LIMIT * INSTRUMENT_COUNT, amount=-LIMIT, instruments=instruments, mult=1
+    );
+    assert rest = LIMIT * INSTRUMENT_COUNT;
     return ();
 }

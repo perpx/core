@@ -17,6 +17,7 @@ from contracts.perpx_v1_exchange.internals import (
     _calculate_exit_fees,
     _calculate_margin_requirement,
     _64x61_to_liquidity_precision,
+    _divide_margin,
 )
 from lib.cairo_math_64x61_git.contracts.cairo_math_64x61.math64x61 import Math64x61
 
@@ -256,5 +257,45 @@ func test_calculate_margin_requirement{
         precision = abs(margin_requirement - ids.margin_requirement // 10**6)
         assert precision <= 1e-5 * notional_size, f'margin requirement error, expected precision under {notional_size*1e-5} dollars, got {precision}'
     %}
+    return ();
+}
+
+// TEST DIVIDE MARGIN
+
+@external
+func test_divide_margin{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    random: felt
+) {
+    alloc_locals;
+    local amount;
+    local total;
+    local instruments;
+    %{
+        from random import randint, sample, seed
+        import numpy as np
+        seed(ids.random)
+        length = ids.random % ids.INSTRUMENT_COUNT + 1
+        sample_instruments = sample(range(0, ids.INSTRUMENT_COUNT), length)
+        ids.instruments = sum([2**x for x in sample_instruments])
+
+        liquidity = [randint(1, ids.LIMIT)for i in range(length)]
+        max_liquidity = max(liquidity)
+        amount = randint(-2*max_liquidity, 2*max_liquidity)
+        ids.amount = amount if amount > 0 else PRIME - abs(amount) 
+        ids.total = length * abs(amount)
+        rest = ids.total - sum([abs(amount) if l + amount > 0 else l for l in liquidity])
+        for (i, bit) in enumerate(sample_instruments):
+            store(context.self_address, "storage_liquidity", [liquidity[i]], key=[2**bit])
+    %}
+    let rest = _divide_margin(total=total, amount=amount, instruments=instruments, mult=1);
+    %{
+        rest_signed = context.signed_int(ids.rest)
+        assert  rest_signed == rest, f'rest error, expected {rest}, got {rest_signed}'
+        for (i, bit) in enumerate(sample_instruments):
+            change = amount if liquidity[i] + amount > 0 else -liquidity[i]
+            liq = context.signed_int(load(context.self_address, "storage_liquidity", "felt", key=[2**bit])[0])
+            assert liq == liquidity[i] + change, f'liquidity error, expected {liquidity[i]+change}, got {liq}'
+    %}
+
     return ();
 }
