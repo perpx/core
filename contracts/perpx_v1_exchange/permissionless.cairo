@@ -17,6 +17,8 @@ from contracts.perpx_v1_exchange.internals import (
     _calculate_exit_fees,
     _calculate_fees,
     _calculate_margin_requirement,
+    _close_all_positions,
+    _divide_margin,
 )
 from contracts.constants.perpx_constants import (
     LIMIT,
@@ -110,7 +112,8 @@ func liquidate{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
             // if margin > MAX_LIQUIDATOR_PAY_OUT, distribute remainder to pools
             tempvar remainder = margin - MAX_LIQUIDATOR_PAY_OUT;
             let (q, r) = unsigned_div_rem(remainder, instrument_count);
-            _divide_margin(amount=q, instruments=instruments, mult=1);
+            _divide_margin(total=remainder, amount=q, instruments=instruments, mult=1);
+            // TODO improve the winnings distribution
             IERC20.transfer(
                 contract_address=token_address,
                 recipient=caller,
@@ -133,7 +136,7 @@ func liquidate{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
         // If 0 < margin < MIN_LIQUIDATOR_PAY_OUT, send MLPAY.
         tempvar remainder = MIN_LIQUIDATOR_PAY_OUT - margin;
         let (q, r) = unsigned_div_rem(remainder, instrument_count);
-        _divide_margin(amount=-q, instruments=instruments, mult=1);
+        _divide_margin(total=remainder, amount=-q, instruments=instruments, mult=1);
         IERC20.transfer(
             contract_address=token_address,
             recipient=caller,
@@ -144,7 +147,8 @@ func liquidate{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
     } else {
         // if margin < 0, send minimum reward to keeper bot and distribute looses on pools
         let (q, r) = signed_div_rem(margin, instrument_count, MAX_BOUND);
-        _divide_margin(amount=q, instruments=instruments, mult=1);
+        // TODO improve the loss distribution
+        _divide_margin(total=-margin, amount=q, instruments=instruments, mult=1);
         IERC20.transfer(
             contract_address=token_address,
             recipient=caller,
@@ -153,57 +157,6 @@ func liquidate{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
         Liquidate.emit(owner=owner, instruments=instruments);
         return ();
     }
-}
-
-// @notice Closes all the users positions
-// @param owner The owner of the positions
-// @param instruments The instruments owned by the owner
-// @param instrument_count The count of instruments
-// @param mult The multiplication factor
-func _close_all_positions{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
-    owner: felt, instruments: felt, instrument_count: felt, mult: felt
-) -> (instrument_count: felt) {
-    alloc_locals;
-    if (instruments == 0) {
-        return (instrument_count=instrument_count);
-    }
-    let (q, r) = unsigned_div_rem(instruments, 2);
-    if (r == 1) {
-        let (price) = storage_oracles.read(instrument=mult);
-        let (_) = Position.close_position(owner=owner, instrument=mult, price=price, fees=0);
-
-        let (count) = _close_all_positions(
-            owner=owner, instruments=q, instrument_count=instrument_count + 1, mult=mult * 2
-        );
-        return (instrument_count=count);
-    }
-    let (count) = _close_all_positions(
-        owner=owner, instruments=q, instrument_count=instrument_count, mult=mult * 2
-    );
-    return (instrument_count=count);
-}
-
-// @notice Divides margin accross the instruments
-// @param amount The amount to change the liquidity by
-// @param instruments The instruments owned by the owner
-// @param mult The multiplication factor
-// TODO add way to determine if margin substraction was successful
-func _divide_margin{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
-    amount: felt, instruments: felt, mult: felt
-) {
-    alloc_locals;
-    if (instruments == 0) {
-        return ();
-    }
-    let (q, r) = unsigned_div_rem(instruments, 2);
-    if (r == 1) {
-        let (liquidity) = storage_liquidity.read(mult);
-        storage_liquidity.write(mult, liquidity + amount);
-        _divide_margin(amount=amount, instruments=q, mult=mult * 2);
-        return ();
-    }
-    _divide_margin(amount=amount, instruments=q, mult=mult * 2);
-    return ();
 }
 
 // @notice Add collateral for the owner
