@@ -20,6 +20,7 @@ from contracts.constants.perpx_constants import (
     VOLATILITY_FEE_RATE_PRECISION,
     MAX_LIQUIDATOR_PAY_OUT,
     MIN_LIQUIDATOR_PAY_OUT,
+    MAX_QUEUE_SIZE,
 )
 
 //
@@ -190,80 +191,44 @@ func test_add_collateral{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_c
 
 @external
 func test_remove_collateral{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
-    provide_random: felt, remove_random: felt
+    random: felt
 ) {
     alloc_locals;
-    local address;
-    local provide_amount;
-    local remove_amount;
-    %{ ids.address = context.self_address %}
-
-    // prank the approval and the add collateral calls
+    let (local amounts: felt*) = alloc();
+    let (local timestamps: felt*) = alloc();
+    local length;
     %{
-        stop_prank_callable = start_prank(ids.ACCOUNT)
-        ids.provide_amount = ids.provide_random % ids.LIMIT + 1
-        ids.remove_amount = ids.remove_random % ids.provide_amount + 1
+        from random import randint, seed
+        seed(ids.random)
+        ids.length = ids.random % 10 + 1
+        amounts = [randint(1, ids.LIMIT) for i in range(ids.length)]
+        timestamps = [randint(1, ids.LIMIT) for i in range(ids.length)]
+        for i in range(ids.length): 
+            memory[ids.amounts + i] = amounts[i]
+            memory[ids.timestamps + i] = timestamps[i]
+        start_prank(ids.ACCOUNT)
     %}
-    ERC20.approve(spender=address, amount=Uint256(provide_amount, 0));
-    add_collateral(amount=provide_amount);
-
-    // create fake positions for the user
+    loop_remove(amounts_len=length, amounts=amounts, ts_len=length, ts=timestamps);
     %{
-        from random import randint, sample, seed
-        import importlib  
-        import numpy as np
-        utils = importlib.import_module("protostar-test.perpx-v1-exchange.utils")
-        seed(ids.provide_amount)
-        length = ids.provide_amount % ids.INSTRUMENT_COUNT + 1
-        sample_instruments = sample(range(0, ids.INSTRUMENT_COUNT), length)
-        instruments = sum([2**i for i in sample_instruments]) 
-
-        # generate random datas which will make the test pass (costs = 0, negative fees)
-        prices = [randint(1, ids.LIMIT) for i in range(length)]
-        fees = [randint(-ids.LIMIT, 0) for i in range(length)]
-        amounts = [randint(0, ids.LIMIT//prices[i]) for i in range(length)]
-        volatility = [randint(1, ids.MATH64X61_FRACT_PART//(5*10**4)) for i in range(length)]
-        k = [randint(1, 100*ids.MATH64X61_FRACT_PART) for i in range(length)]
-        longs = [randint(1, ids.LIMIT//prices[i]) for i in range(length)]
-        shorts = [randint(1, ids.LIMIT//prices[i]) for i in range(length)]
-        liquidity = [randint(1e6, ids.LIMIT) for i in range(length)]
-        fee_rate = randint(0, ids.VOLATILITY_FEE_RATE_PRECISION)
-
-        # calculate the owners margin
-        f = sum(fees)
-        exit_fees = utils.calculate_exit_fees(prices, amounts, longs, shorts, liquidity, fee_rate, ids.VOLATILITY_FEE_RATE_PRECISION)
-        pnl = sum([p*a for (p,a) in zip(prices, amounts)])
-        margin = ids.provide_amount - ids.remove_amount + pnl - f - exit_fees
-
-        # calculate the minimum margin for the instruments owner
-        v_scaled = np.array(volatility)/2**61
-        k_scaled = np.array(k, dtype=float)/2**61
-        prices_scaled = np.array(prices)/ids.LIQUIDITY_PRECISION
-        amounts_scaled = np.array(amounts)/ids.LIQUIDITY_PRECISION
-        size = np.multiply(prices_scaled, np.absolute(amounts_scaled))
-        min_margin = utils.calculate_margin_requirement(v_scaled, k_scaled, size) * ids.LIQUIDITY_PRECISION
-        assume(margin > min_margin)
-
-        for (i, bit) in enumerate(sample_instruments):
-            store(context.self_address, "storage_oracles", [prices[i]], key=[2**bit])
-            store(context.self_address, "storage_positions", [fees[i], 0, amounts[i]], key=[ids.ACCOUNT, 2**bit])
-            store(context.self_address, "storage_volatility", [volatility[i]], key=[2**bit])
-            store(context.self_address, "storage_margin_parameters", [k[i], 0], key=[2**bit])
-            store(context.self_address, "storage_longs", [longs[i]], key=[2**bit])
-            store(context.self_address, "storage_shorts", [shorts[i]], key=[2**bit])
-            store(context.self_address, "storage_liquidity", [liquidity[i]], key=[2**bit])
-        store(context.self_address, "storage_volatility_fee_rate", [fee_rate])
-        store(context.self_address, "storage_user_instruments", [instruments], key=[ids.ACCOUNT])
+        count = load(context.self_address, "storage_operations_count", "felt")[0]
+        assert count == ids.length, f'length error, expected {ids.length}, got {count}'
+        for i in range(count):
+            collateral = load(context.self_address, "storage_operations_queue", "QueuedOperation", key=[i])
+            assert collateral[0] == ids.ACCOUNT, f'caller error, expected {ids.ACCOUNT}, got {collateral[0]}'
+            assert collateral[1] == amounts[i], f'amount error, expected {amounts[i]}, got {collateral[1]}'
+            assert collateral[3] == timestamps[i], f'timestamp error, expected {timestamps[i]}, got {collateral[3]}'
     %}
+    return ();
+}
 
-    // remove the collateral
-    remove_collateral(amount=remove_amount);
-    %{
-        stop_prank_callable() 
-        user_collateral = load(ids.address, "storage_collateral", "felt", key=[ids.ACCOUNT])[0]
-        new_collateral = ids.provide_amount - ids.remove_amount
-        assert user_collateral == new_collateral, f'collateral error, expected {new_collateral}, got {user_collateral}'
-    %}
+func loop_remove{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    amounts_len: felt, amounts: felt*, ts_len: felt, ts: felt*
+) {
+    if (amounts_len == 0) {
+        return ();
+    }
+    remove_collateral(amount=[amounts], valid_until=[ts]);
+    loop_remove(amounts_len=amounts_len - 1, amounts=amounts + 1, ts_len=ts_len - 1, ts=ts + 1);
     return ();
 }
 
