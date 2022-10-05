@@ -201,11 +201,13 @@ func add_collateral{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_
     return ();
 }
 
-// @notice Remove collateral for the owner
+// @notice Add the collateral removal to the operations queue
 // @param amount The change in collateral
+// @param valid_until The validity timestamp of the collateral removal
+// TODO add max queue size
 @external
 func remove_collateral{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
-    amount: felt
+    amount: felt, valid_until: felt
 ) {
     alloc_locals;
     local limit = LIMIT;
@@ -219,35 +221,18 @@ func remove_collateral{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_che
         assert [range_check_ptr + 1] = LIMIT - amount;
     }
     let range_check_ptr = range_check_ptr + 2;
-
-    // check the user can remove this much collateral
-    let (local caller) = get_caller_address();
-    let (collateral) = storage_collateral.read(caller);
-    let new_collateral = collateral - amount;
-
-    with_attr error_message("insufficient collateral") {
-        assert [range_check_ptr] = new_collateral;
+    with_attr error_message("invalid expiration timestamp") {
+        assert [range_check_ptr] = valid_until - 1;
+        assert [range_check_ptr + 1] = LIMIT - valid_until;
     }
-    let range_check_ptr = range_check_ptr + 1;
+    let range_check_ptr = range_check_ptr + 2;
 
-    // check the user is not exposed by removing this much collateral
-    // (collateral_remaining + PnL - fees - exit_imbalance_fees) > Sum(value_at_risk*k*sigma)
-    let (instruments) = storage_user_instruments.read(caller);
-    let (exit_fees) = _calculate_exit_fees(owner=caller, instruments=instruments, mult=1);
-    let (fees) = _calculate_fees(owner=caller, instruments=instruments, mult=1);
-    let (pnl) = _calculate_pnl(owner=caller, instruments=instruments, mult=1);
-    tempvar margin = new_collateral + pnl - fees - exit_fees;
-    let (min_margin) = _calculate_margin_requirement(owner=caller, instruments=instruments, mult=1);
-
-    with_attr error_message("insufficient collateral") {
-        assert_le(min_margin, margin);
-    }
-    storage_collateral.write(caller, new_collateral);
-
-    let (exchange) = get_contract_address();
-    let (token_address) = storage_token.read();
-    IERC20.transfer(contract_address=token_address, recipient=caller, amount=Uint256(amount, 0));
-
+    let (count) = storage_operations_count.read();
+    storage_operations_queue.write(
+        count,
+        QueuedOperation(caller=caller, amount=amount, instrument=0, valid_until=valid_until, operation=Operation.remove_collateral),
+    );
+    storage_operations_count.write(count + 1);
     return ();
 }
 
