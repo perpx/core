@@ -1,6 +1,6 @@
 %lang starknet
 
-from contracts.perpx_v1_exchange.structures import Parameter, BatchedTrade, BatchedCollateral
+from contracts.perpx_v1_exchange.structures import Parameter, QueuedOperation
 
 //
 // Storage
@@ -31,19 +31,11 @@ func storage_collateral(owner: felt) -> (amount: felt) {
 }
 
 @storage_var
-func storage_trades_queue(index: felt) -> (trade: BatchedTrade) {
+func storage_operations_queue(index: felt) -> (operation: QueuedOperation) {
 }
 
 @storage_var
-func storage_trades_count() -> (count: felt) {
-}
-
-@storage_var
-func storage_collateral_queue(index: felt) -> (collateral: BatchedCollateral) {
-}
-
-@storage_var
-func storage_collateral_count() -> (count: felt) {
+func storage_operations_count() -> (count: felt) {
 }
 
 @storage_var

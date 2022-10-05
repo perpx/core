@@ -2,7 +2,7 @@
 
 from starkware.cairo.common.cairo_builtins import HashBuiltin
 from starkware.starknet.common.syscalls import get_caller_address, get_contract_address
-from starkware.cairo.common.math import assert_le, unsigned_div_rem, signed_div_rem
+from starkware.cairo.common.math import assert_le, unsigned_div_rem, signed_div_rem, assert_not_zero
 from starkware.cairo.common.math_cmp import is_nn, is_le
 from starkware.cairo.common.uint256 import Uint256
 
@@ -11,6 +11,8 @@ from contracts.perpx_v1_exchange.storage import (
     storage_oracles,
     storage_collateral,
     storage_token,
+    storage_operations_queue,
+    storage_operations_count,
 )
 from contracts.perpx_v1_exchange.internals import (
     _calculate_pnl,
@@ -26,6 +28,7 @@ from contracts.constants.perpx_constants import (
     MAX_LIQUIDATOR_PAY_OUT,
     MIN_LIQUIDATOR_PAY_OUT,
 )
+from contracts.perpx_v1_exchange.structures import QueuedOperation, Operation
 from contracts.perpx_v1_instrument import update_liquidity
 from contracts.perpx_v1_exchange.events import Liquidate, Trade
 from contracts.library.position import Position, Info
