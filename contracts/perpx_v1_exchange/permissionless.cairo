@@ -84,6 +84,9 @@ func liquidate{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
     // check the user is exposed
     // (collateral_remaining + PnL - fees - exit_imbalance_fees) > Sum(value_at_risk*k*sigma)
     alloc_locals;
+    with_attr error_message("user cannot be the zero address") {
+        assert_not_zero(owner);
+    }
     let (collateral) = storage_collateral.read(owner);
     let (local instruments) = storage_user_instruments.read(owner);
 
@@ -172,6 +175,10 @@ func add_collateral{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_
     let range_check_ptr = range_check_ptr + 2;
 
     let (caller) = get_caller_address();
+    with_attr error_message("caller is the zero address") {
+        assert_not_zero(caller);
+    }
+
     let (exchange) = get_contract_address();
     let (collateral) = storage_collateral.read(caller);
 
@@ -200,6 +207,10 @@ func remove_collateral{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_che
     alloc_locals;
     local limit = LIMIT;
     // check the limits
+    let (local caller) = get_caller_address();
+    with_attr error_message("caller is the zero address") {
+        assert_not_zero(caller);
+    }
     with_attr error_message("collateral decrease limited to {limit}") {
         assert [range_check_ptr] = amount - 1;
         assert [range_check_ptr + 1] = LIMIT - amount;
@@ -253,6 +264,10 @@ func add_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_p
     let range_check_ptr = range_check_ptr + 2;
 
     let (caller) = get_caller_address();
+    with_attr error_message("caller is the zero address") {
+        assert_not_zero(caller);
+    }
+
     let (exchange) = get_contract_address();
     let (stake: Stake) = storage_user_stake.read(caller, instrument);
 
@@ -288,6 +303,10 @@ func remove_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_chec
     let range_check_ptr = range_check_ptr + 2;
 
     let (local caller) = get_caller_address();
+    with_attr error_message("caller is the zero address") {
+        assert_not_zero(caller);
+    }
+
     update_liquidity(amount=-amount, owner=caller, instrument=instrument);
 
     let (exchange) = get_contract_address();
