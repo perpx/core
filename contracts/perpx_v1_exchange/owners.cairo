@@ -1,24 +1,53 @@
 %lang starknet
 
 from starkware.cairo.common.cairo_builtins import HashBuiltin
+from starkware.starknet.common.syscalls import get_caller_address, get_contract_address
 from starkware.cairo.common.math import unsigned_div_rem
+from starkware.cairo.common.math_cmp import is_le, is_nn
+from starkware.starknet.common.syscalls import get_block_timestamp
+from starkware.cairo.common.uint256 import Uint256
 
 from contracts.perpx_v1_exchange.storage import (
     storage_instrument_count,
+    storage_user_instruments,
     storage_oracles,
     storage_prev_oracles,
+    storage_collateral,
+    storage_token,
     storage_margin_parameters,
     storage_volatility,
+    storage_operations_queue,
+    storage_operations_count,
 )
-from contracts.perpx_v1_exchange.structures import Parameter
+from contracts.perpx_v1_exchange.internals import (
+    _calculate_pnl,
+    _calculate_exit_fees,
+    _calculate_fees,
+    _calculate_margin_requirement,
+)
+from contracts.perpx_v1_exchange.structures import Parameter, QueuedOperation
 from contracts.perpx_v1_exchange.internals import _verify_length, _verify_instruments
 from contracts.constants.perpx_constants import LIQUIDITY_PRECISION
 from contracts.utils.access_control import assert_only_owner
 from lib.cairo_math_64x61_git.contracts.cairo_math_64x61.math64x61 import Math64x61
 
 //
+// Interfaces
+//
+@contract_interface
+namespace IERC20 {
+    func transfer(recipient: felt, amount: Uint256) {
+    }
+    func transferFrom(sender: felt, recipient: felt, amount: Uint256) {
+    }
+}
+
+//
 // OWNER
 //
+
+// TODO pausing feature
+// TODO add queues flushing feature
 
 // @notice Update the prices of the instruments
 // @param prices_len The number of instruments to update
@@ -185,5 +214,119 @@ func _update_prev_prices{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_c
     _update_prev_prices(
         prev_prices_len=prev_prices_len - 1, prev_prices=prev_prices + 1, mult=mult * 2
     );
+    return ();
+}
+
+// @notice Executes all pending operations in the queue
+func _execute_queued_operations{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    let (count) = storage_operations_count.read();
+    let ts = get_block_timestamp();
+    _execute_queued_operations_loop(timestamp=ts, count=count, index=0);
+    storage_operations_count.write(0);
+    return ();
+}
+
+// @notice Loop executing all pending collateral removals
+// @param timestamp The current timestamp
+// @param count The total amount of collateral removals
+// @param index The current index of collateral removal
+// TODO test
+func _execute_queued_operations_loop{
+    syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr
+}(timestamp: felt, count: felt, index: felt) {
+    alloc_locals;
+    if (count == index) {
+        return ();
+    }
+    let (local operation: QueuedOperation) = storage_operations_queue.read(index);
+    // skip if now > valid_until
+    let is_valid_ts = is_le(timestamp, operation.valid_until);
+    if (is_valid_ts == 0) {
+        storage_operations_queue.write(index, QueuedOperation(0, 0, 0, 0, 0));
+        _execute_queued_operations_loop(timestamp=timestamp, count=count, index=index + 1);
+        return ();
+    }
+
+    local caller = operation.caller;
+    let op = operation.operation;
+    if (op == Operation.trade) {
+        _trade(caller=caller, amount=operation.amount, instrument=operation.instrument);
+        storage_operations_queue.write(index, QueuedOperation(0, 0, 0, 0, 0));
+        _execute_queued_operations_loop(timestamp=timestamp, count=count, index=index + 1);
+        return ();
+    }
+    if (op == Operation.close) {
+        _close(caller=caller, amount=operation.amount);
+        storage_operations_queue.write(index, QueuedOperation(0, 0, 0, 0, 0));
+        _execute_queued_operations_loop(timestamp=timestamp, count=count, index=index + 1);
+        return ();
+    }
+    if (op == Operation.remove_collateral) {
+        _remove_collateral(caller=caller, amount=operation.amount);
+        storage_operations_queue.write(index, QueuedOperation(0, 0, 0, 0, 0));
+        _execute_queued_operations_loop(timestamp=timestamp, count=count, index=index + 1);
+        return ();
+    }
+    return ();
+}
+
+// @notice Execute a trading order
+// @param caller The user trading
+// @param amount The amount of the trade (precision: 6)
+// @param instrument The instrument to trade
+// TODO implement
+// TODO test
+func _trade{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    caller: felt, amount: felt, instrument: felt
+) {
+    return ();
+}
+
+// @notice Execute the closing of a position
+// @param caller The user closing the position
+// @param instrument The instrument to close the position
+// TODO implement
+// TODO test
+func _close{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    caller: felt, instrument: felt
+) {
+    return ();
+}
+
+// @notice Remove the caller's collateral by amount
+// @param caller The user removing collateral
+// @param amount The amount of collateral to remove (precision: 6)
+// TODO test
+func _remove_collateral{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    caller: felt, amount: felt
+) {
+    alloc_locals;
+    // check the user can remove this much collateral
+    let (collateral) = storage_collateral.read(caller);
+    let new_collateral = collateral - amount;
+
+    let positive_collateral = is_nn(new_collateral);
+    if (positive_collateral == 0) {
+        return ();
+    }
+
+    // check the user is not exposed by removing this much collateral
+    // (collateral_remaining + PnL - fees - exit_imbalance_fees) > Sum(value_at_risk*k*sigma)
+    let (local instruments) = storage_user_instruments.read(caller);
+    let (exit_fees) = _calculate_exit_fees(owner=caller, instruments=instruments, mult=1);
+    let (fees) = _calculate_fees(owner=caller, instruments=instruments, mult=1);
+    let (pnl) = _calculate_pnl(owner=caller, instruments=instruments, mult=1);
+    tempvar margin = new_collateral + pnl - fees - exit_fees;
+    let (min_margin) = _calculate_margin_requirement(owner=caller, instruments=instruments, mult=1);
+
+    let valid_margin = is_le(min_margin, margin);
+    if (valid_margin == 0) {
+        return ();
+    }
+
+    storage_collateral.write(caller, new_collateral);
+    let (exchange) = get_contract_address();
+    let (token_address) = storage_token.read();
+    IERC20.transfer(contract_address=token_address, recipient=caller, amount=Uint256(amount, 0));
     return ();
 }
