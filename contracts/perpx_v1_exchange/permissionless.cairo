@@ -50,23 +50,40 @@ namespace IERC20 {
 // PERMISSIONLESS
 //
 
-// @notice Trade an amount of the index
+// TODO add instrument value check
+
+// @notice Add the trading order to the operation queue
 // @param amount The amount to trade
 // @param instrument The instrument to trade
+// @param valid_until The validity timestamp of the closing order
 @external
 func trade{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
-    amount: felt, instrument: felt
+    amount: felt, instrument: felt, valid_until: felt
 ) -> () {
     alloc_locals;
-    // TODO check price and amount limits
-    // TODO calculate owner pnl to check if he can trade this amount (must be X % over collateral)
-    let (local owner) = get_caller_address();
-    let (instruments) = storage_user_instruments.read(owner);
-    let (pnl) = _calculate_pnl(owner=owner, instruments=instruments, mult=1);
-    // TODO batch the trade
-    let (price) = storage_oracles.read(instrument);
-    // TODO change the fee
-    Trade.emit(owner=owner, instrument=instrument, price=price, amount=amount, fee=0);
+    local limit = LIMIT;
+    // check the limits
+    let (local caller) = get_caller_address();
+    with_attr error_message("caller is the zero address") {
+        assert_not_zero(caller);
+    }
+    with_attr error_message("trading amount limited to {limit}") {
+        assert [range_check_ptr] = amount - 1;
+        assert [range_check_ptr + 1] = LIMIT - amount;
+    }
+    let range_check_ptr = range_check_ptr + 2;
+    with_attr error_message("invalid expiration timestamp") {
+        assert [range_check_ptr] = valid_until - 1;
+        assert [range_check_ptr + 1] = LIMIT - valid_until;
+    }
+    let range_check_ptr = range_check_ptr + 2;
+
+    let (count) = storage_operations_count.read();
+    storage_operations_queue.write(
+        count,
+        QueuedOperation(caller=caller, amount=amount, instrument=instrument, valid_until=valid_until, operation=Operation.trade),
+    );
+    storage_operations_count.write(count + 1);
     return ();
 }
 
