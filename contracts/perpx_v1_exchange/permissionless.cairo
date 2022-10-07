@@ -70,13 +70,31 @@ func trade{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
     return ();
 }
 
-// @notice Close the position of the owner, set fees and pnl to zero
+// @notice Add the closing of the position of the owner to the queue
 // @param instrument The instrument for which to close the position
-// TODO update
-func close{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(instrument: felt) {
-    // let (_price) = storage_price.read()
-    // let (_delta) = settle_position(address=owner, price=_price)
-    // Close.emit(owner=owner, price=_price, delta=_delta)
+// @param valid_until The validity timestamp of the closing order
+func close{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    instrument: felt, valid_until: felt
+) {
+    alloc_locals;
+    local limit = LIMIT;
+    // check the limits
+    let (local caller) = get_caller_address();
+    with_attr error_message("caller is the zero address") {
+        assert_not_zero(caller);
+    }
+    with_attr error_message("invalid expiration timestamp") {
+        assert [range_check_ptr] = valid_until - 1;
+        assert [range_check_ptr + 1] = LIMIT - valid_until;
+    }
+    let range_check_ptr = range_check_ptr + 2;
+
+    let (count) = storage_operations_count.read();
+    storage_operations_queue.write(
+        count,
+        QueuedOperation(caller=caller, amount=0, instrument=instrument, valid_until=valid_until, operation=Operation.close),
+    );
+    storage_operations_count.write(count + 1);
     return ();
 }
 

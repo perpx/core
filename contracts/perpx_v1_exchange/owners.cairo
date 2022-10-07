@@ -296,7 +296,6 @@ func _close{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
 // @notice Remove the caller's collateral by amount
 // @param caller The user removing collateral
 // @param amount The amount of collateral to remove (precision: 6)
-// TODO test
 func _remove_collateral{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
     caller: felt, amount: felt
 ) {
