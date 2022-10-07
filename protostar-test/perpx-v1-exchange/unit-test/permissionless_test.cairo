@@ -6,6 +6,8 @@ from starkware.cairo.common.uint256 import Uint256
 from starkware.starknet.common.syscalls import get_contract_address, get_caller_address
 
 from contracts.perpx_v1_exchange.permissionless import (
+    trade,
+    close,
     add_liquidity,
     remove_liquidity,
     add_collateral,
@@ -22,6 +24,7 @@ from contracts.constants.perpx_constants import (
     MIN_LIQUIDATOR_PAY_OUT,
     MAX_QUEUE_SIZE,
 )
+from contracts.perpx_v1_exchange.structures import Operation
 
 //
 // Constants
@@ -79,158 +82,56 @@ func __setup__{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
     return ();
 }
 
-// TEST ADD LIQUIDITY
+// TEST CLOSE
 
 @external
-func test_add_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
-    random: felt
-) {
+func test_close{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(random: felt) {
     alloc_locals;
-    local address;
-    local amount_1;
-    local amount_2;
-    %{ ids.address = context.self_address %}
-
-    // prank the approval and the add liquidity calls
-    %{
-        ids.amount_1 = ids.random % (ids.LIMIT//100) + 1
-        ids.amount_2 = ids.random % (ids.LIMIT//100 - ids.amount_1) + 1
-        start_prank(ids.ACCOUNT)
-    %}
-    ERC20.approve(spender=address, amount=Uint256(2 * LIMIT, 0));
-
-    // add liquidity
-    add_liquidity(amount=amount_1, instrument=INSTRUMENT);
-
-    %{
-        user_stake = load(context.self_address, "storage_user_stake", "Stake", key=[ids.ACCOUNT, ids.INSTRUMENT])
-        account_balance = load(context.self_address, "ERC20_balances", "Uint256", key=[ids.ACCOUNT])
-        exchange_balance = load(context.self_address, "ERC20_balances", "Uint256", key=[ids.address])
-
-        assert user_stake[0] == ids.amount_1*100, f'user stake shares error, expected {ids.amount_1 * 100}, got {user_stake[0]}'
-        assert account_balance == [ids.RANGE_CHECK_BOUND-1-ids.amount_1, 0], f'account balance error, expected [{ids.RANGE_CHECK_BOUND-1-ids.amount_1}, 0] got {account_balance}'
-        assert exchange_balance == [ids.amount_1, 0], f'exchange balance error, expected [{ids.amount_1}, 0] got {exchange_balance}'
-    %}
-
-    // add liquidity
-    add_liquidity(amount=amount_2, instrument=INSTRUMENT);
-    %{
-        stake = load(context.self_address, "storage_user_stake", "Stake", key=[ids.ACCOUNT, ids.INSTRUMENT])
-
-        assert stake[0] == user_stake[0] + ids.amount_2*user_stake[0]//ids.amount_1, f'user stake shares error, expected {user_stake[0] + ids.amount_2*user_stake[0]//ids.amount_1}, got {stake[0]}'
-    %}
-
-    return ();
-}
-
-// TEST REMOVE LIQUIDITY
-
-@external
-func test_remove_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
-    provide_random: felt, remove_random: felt
-) {
-    alloc_locals;
-    local address;
-    local provide_amount;
-    local remove_amount;
-    %{ ids.address = context.self_address %}
-
-    // prank the approval and the add liquidity calls
-    %{
-        stop_prank_callable = start_prank(ids.ACCOUNT)
-        ids.provide_amount = ids.provide_random % (ids.LIMIT//100) + 1
-        ids.remove_amount = ids.remove_random % ids.provide_amount + 1
-    %}
-    ERC20.approve(spender=address, amount=Uint256(provide_amount, 0));
-
-    // add liquidity
-    add_liquidity(amount=provide_amount, instrument=INSTRUMENT);
-
-    // remove the liquidity
-    remove_liquidity(amount=remove_amount, instrument=INSTRUMENT);
-    %{
-        user_stake = load(ids.address, "storage_user_stake", "Stake", key=[ids.ACCOUNT, ids.INSTRUMENT])
-        shares = 100*(ids.provide_amount - ids.remove_amount) # share change = initial shares - remove shares = 100*provide - remove*100*provide/provide
-
-        assert user_stake[0] == shares, f'user stake shares error, expected {shares}, got {user_stake[0]}'
-    %}
-
-    return ();
-}
-
-// TEST ADD COLLATERAL
-
-@external
-func test_add_collateral{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
-    random: felt
-) {
-    alloc_locals;
-    local address;
-    local amount;
-    %{ ids.address = context.self_address %}
-
-    // prank the approval and the add collateral calls
-    %{
-        stop_prank_callable = start_prank(ids.ACCOUNT)
-        ids.amount = ids.random % ids.LIMIT + 1
-    %}
-    ERC20.approve(spender=address, amount=Uint256(amount, 0));
-    add_collateral(amount=amount);
-
-    %{
-        user_collateral = load(ids.address, "storage_collateral", "felt", key=[ids.ACCOUNT])
-        account_balance = load(ids.address, "ERC20_balances", "Uint256", key=[ids.ACCOUNT])
-        exchange_balance = load(ids.address, "ERC20_balances", "Uint256", key=[ids.address])
-
-        assert user_collateral[0] == ids.amount, f'user collateral error, expected {ids.amount}, got {user_collateral[0]}'
-        assert account_balance == [ids.RANGE_CHECK_BOUND - 1 - ids.amount, 0], f'account balance error, expected [{ids.RANGE_CHECK_BOUND-1-ids.amount}, 0] got {account_balance}'
-        assert exchange_balance == [ids.amount, 0], f'exchange balance error, expected [{ids.amount}, 0] got {exchange_balance}'
-    %}
-    return ();
-}
-
-@external
-func test_remove_collateral{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
-    random: felt
-) {
-    alloc_locals;
-    let (local amounts: felt*) = alloc();
+    let (local instruments: felt*) = alloc();
     let (local timestamps: felt*) = alloc();
     local length;
     %{
-        from random import randint, seed
+        from random import randint, seed, sample
         seed(ids.random)
-        ids.length = ids.random % 10 + 1
-        amounts = [randint(1, ids.LIMIT) for i in range(ids.length)]
+        ids.length = ids.random % ids.INSTRUMENT_COUNT + 1
+        instruments = [2**i for i in sample(range(0, ids.INSTRUMENT_COUNT), ids.length)]
         timestamps = [randint(1, ids.LIMIT) for i in range(ids.length)]
         for i in range(ids.length): 
-            memory[ids.amounts + i] = amounts[i]
+            memory[ids.instruments + i] = instruments[i]
             memory[ids.timestamps + i] = timestamps[i]
         start_prank(ids.ACCOUNT)
     %}
-    loop_remove(amounts_len=length, amounts=amounts, ts_len=length, ts=timestamps);
+    loop_close(instruments_len=length, instruments=instruments, ts_len=length, ts=timestamps);
     %{
         count = load(context.self_address, "storage_operations_count", "felt")[0]
         assert count == ids.length, f'length error, expected {ids.length}, got {count}'
         for i in range(count):
-            collateral = load(context.self_address, "storage_operations_queue", "QueuedOperation", key=[i])
-            assert collateral[0] == ids.ACCOUNT, f'caller error, expected {ids.ACCOUNT}, got {collateral[0]}'
-            assert collateral[1] == amounts[i], f'amount error, expected {amounts[i]}, got {collateral[1]}'
-            assert collateral[3] == timestamps[i], f'timestamp error, expected {timestamps[i]}, got {collateral[3]}'
+            close = load(context.self_address, "storage_operations_queue", "QueuedOperation", key=[i])
+            assert close[0] == ids.ACCOUNT, f'caller error, expected {ids.ACCOUNT}, got {close[0]}'
+            assert close[2] == instruments[i], f'amount error, expected {instruments[i]}, got {close[1]}'
+            assert close[3] == timestamps[i], f'timestamp error, expected {timestamps[i]}, got {close[3]}'
+            assert close[4] == ids.Operation.close, f'operation error, expected {ids.Operation.close}, got {close[4]}'
     %}
     return ();
 }
 
-func loop_remove{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
-    amounts_len: felt, amounts: felt*, ts_len: felt, ts: felt*
+func loop_close{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    instruments_len: felt, instruments: felt*, ts_len: felt, ts: felt*
 ) {
-    if (amounts_len == 0) {
+    if (instruments_len == 0) {
         return ();
     }
-    remove_collateral(amount=[amounts], valid_until=[ts]);
-    loop_remove(amounts_len=amounts_len - 1, amounts=amounts + 1, ts_len=ts_len - 1, ts=ts + 1);
+    close(instrument=[instruments], valid_until=[ts]);
+    loop_close(
+        instruments_len=instruments_len - 1,
+        instruments=instruments + 1,
+        ts_len=ts_len - 1,
+        ts=ts + 1,
+    );
     return ();
 }
+
+// TEST LIQUIDATE
 
 @external
 func test_liquidate_negative_margin{
@@ -561,5 +462,158 @@ func test_liquidate_positive_max_payout{
             assert position == [0, 0, 0], f'position error, expected [0, 0, 0], got {position}'
             assert liquidity[i] + liquidity_change == new_liquidity, f'liquidity error, expected {liquidity[i] + liquidity_change}, got {new_liquidity}'
     %}
+    return ();
+}
+
+// TEST ADD COLLATERAL
+
+@external
+func test_add_collateral{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    random: felt
+) {
+    alloc_locals;
+    local address;
+    local amount;
+    %{ ids.address = context.self_address %}
+
+    // prank the approval and the add collateral calls
+    %{
+        stop_prank_callable = start_prank(ids.ACCOUNT)
+        ids.amount = ids.random % ids.LIMIT + 1
+    %}
+    ERC20.approve(spender=address, amount=Uint256(amount, 0));
+    add_collateral(amount=amount);
+
+    %{
+        user_collateral = load(ids.address, "storage_collateral", "felt", key=[ids.ACCOUNT])
+        account_balance = load(ids.address, "ERC20_balances", "Uint256", key=[ids.ACCOUNT])
+        exchange_balance = load(ids.address, "ERC20_balances", "Uint256", key=[ids.address])
+
+        assert user_collateral[0] == ids.amount, f'user collateral error, expected {ids.amount}, got {user_collateral[0]}'
+        assert account_balance == [ids.RANGE_CHECK_BOUND - 1 - ids.amount, 0], f'account balance error, expected [{ids.RANGE_CHECK_BOUND-1-ids.amount}, 0] got {account_balance}'
+        assert exchange_balance == [ids.amount, 0], f'exchange balance error, expected [{ids.amount}, 0] got {exchange_balance}'
+    %}
+    return ();
+}
+
+@external
+func test_remove_collateral{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    random: felt
+) {
+    alloc_locals;
+    let (local amounts: felt*) = alloc();
+    let (local timestamps: felt*) = alloc();
+    local length;
+    %{
+        from random import randint, seed
+        seed(ids.random)
+        ids.length = ids.random % 10 + 1
+        amounts = [randint(1, ids.LIMIT) for i in range(ids.length)]
+        timestamps = [randint(1, ids.LIMIT) for i in range(ids.length)]
+        for i in range(ids.length): 
+            memory[ids.amounts + i] = amounts[i]
+            memory[ids.timestamps + i] = timestamps[i]
+        start_prank(ids.ACCOUNT)
+    %}
+    loop_remove(amounts_len=length, amounts=amounts, ts_len=length, ts=timestamps);
+    %{
+        count = load(context.self_address, "storage_operations_count", "felt")[0]
+        assert count == ids.length, f'length error, expected {ids.length}, got {count}'
+        for i in range(count):
+            collateral = load(context.self_address, "storage_operations_queue", "QueuedOperation", key=[i])
+            assert collateral[0] == ids.ACCOUNT, f'caller error, expected {ids.ACCOUNT}, got {collateral[0]}'
+            assert collateral[1] == amounts[i], f'amount error, expected {amounts[i]}, got {collateral[1]}'
+            assert collateral[3] == timestamps[i], f'timestamp error, expected {timestamps[i]}, got {collateral[3]}'
+    %}
+    return ();
+}
+
+func loop_remove{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    amounts_len: felt, amounts: felt*, ts_len: felt, ts: felt*
+) {
+    if (amounts_len == 0) {
+        return ();
+    }
+    remove_collateral(amount=[amounts], valid_until=[ts]);
+    loop_remove(amounts_len=amounts_len - 1, amounts=amounts + 1, ts_len=ts_len - 1, ts=ts + 1);
+    return ();
+}
+
+// TEST ADD LIQUIDITY
+
+@external
+func test_add_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    random: felt
+) {
+    alloc_locals;
+    local address;
+    local amount_1;
+    local amount_2;
+    %{ ids.address = context.self_address %}
+
+    // prank the approval and the add liquidity calls
+    %{
+        ids.amount_1 = ids.random % (ids.LIMIT//100) + 1
+        ids.amount_2 = ids.random % (ids.LIMIT//100 - ids.amount_1) + 1
+        start_prank(ids.ACCOUNT)
+    %}
+    ERC20.approve(spender=address, amount=Uint256(2 * LIMIT, 0));
+
+    // add liquidity
+    add_liquidity(amount=amount_1, instrument=INSTRUMENT);
+
+    %{
+        user_stake = load(context.self_address, "storage_user_stake", "Stake", key=[ids.ACCOUNT, ids.INSTRUMENT])
+        account_balance = load(context.self_address, "ERC20_balances", "Uint256", key=[ids.ACCOUNT])
+        exchange_balance = load(context.self_address, "ERC20_balances", "Uint256", key=[ids.address])
+
+        assert user_stake[0] == ids.amount_1*100, f'user stake shares error, expected {ids.amount_1 * 100}, got {user_stake[0]}'
+        assert account_balance == [ids.RANGE_CHECK_BOUND-1-ids.amount_1, 0], f'account balance error, expected [{ids.RANGE_CHECK_BOUND-1-ids.amount_1}, 0] got {account_balance}'
+        assert exchange_balance == [ids.amount_1, 0], f'exchange balance error, expected [{ids.amount_1}, 0] got {exchange_balance}'
+    %}
+
+    // add liquidity
+    add_liquidity(amount=amount_2, instrument=INSTRUMENT);
+    %{
+        stake = load(context.self_address, "storage_user_stake", "Stake", key=[ids.ACCOUNT, ids.INSTRUMENT])
+
+        assert stake[0] == user_stake[0] + ids.amount_2*user_stake[0]//ids.amount_1, f'user stake shares error, expected {user_stake[0] + ids.amount_2*user_stake[0]//ids.amount_1}, got {stake[0]}'
+    %}
+
+    return ();
+}
+
+// TEST REMOVE LIQUIDITY
+
+@external
+func test_remove_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    provide_random: felt, remove_random: felt
+) {
+    alloc_locals;
+    local address;
+    local provide_amount;
+    local remove_amount;
+    %{ ids.address = context.self_address %}
+
+    // prank the approval and the add liquidity calls
+    %{
+        stop_prank_callable = start_prank(ids.ACCOUNT)
+        ids.provide_amount = ids.provide_random % (ids.LIMIT//100) + 1
+        ids.remove_amount = ids.remove_random % ids.provide_amount + 1
+    %}
+    ERC20.approve(spender=address, amount=Uint256(provide_amount, 0));
+
+    // add liquidity
+    add_liquidity(amount=provide_amount, instrument=INSTRUMENT);
+
+    // remove the liquidity
+    remove_liquidity(amount=remove_amount, instrument=INSTRUMENT);
+    %{
+        user_stake = load(ids.address, "storage_user_stake", "Stake", key=[ids.ACCOUNT, ids.INSTRUMENT])
+        shares = 100*(ids.provide_amount - ids.remove_amount) # share change = initial shares - remove shares = 100*provide - remove*100*provide/provide
+
+        assert user_stake[0] == shares, f'user stake shares error, expected {shares}, got {user_stake[0]}'
+    %}
+
     return ();
 }
