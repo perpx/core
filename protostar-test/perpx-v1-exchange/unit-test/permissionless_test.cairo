@@ -82,6 +82,72 @@ func __setup__{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
     return ();
 }
 
+// TEST TRADE
+
+@external
+func test_trade{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(random: felt) {
+    alloc_locals;
+    let (local amounts: felt*) = alloc();
+    let (local instruments: felt*) = alloc();
+    let (local timestamps: felt*) = alloc();
+    local length;
+    %{
+        from random import randint, seed, sample
+        seed(ids.random)
+        ids.length = ids.random % ids.INSTRUMENT_COUNT + 1
+        instruments = [2**i for i in sample(range(0, ids.INSTRUMENT_COUNT), ids.length)]
+        amounts = [randint(1, ids.LIMIT) for i in range(ids.length)]
+        timestamps = [randint(1, ids.LIMIT) for i in range(ids.length)]
+        for i in range(ids.length): 
+            memory[ids.amounts + i] = amounts[i]
+            memory[ids.instruments + i] = instruments[i]
+            memory[ids.timestamps + i] = timestamps[i]
+        start_prank(ids.ACCOUNT)
+    %}
+    loop_trade(
+        amounts_len=length,
+        amounts=amounts,
+        instruments_len=length,
+        instruments=instruments,
+        ts_len=length,
+        ts=timestamps,
+    );
+    %{
+        count = load(context.self_address, "storage_operations_count", "felt")[0]
+        assert count == ids.length, f'length error, expected {ids.length}, got {count}'
+        for i in range(count):
+            trade = load(context.self_address, "storage_operations_queue", "QueuedOperation", key=[i])
+            assert trade[0] == ids.ACCOUNT, f'caller error, expected {ids.ACCOUNT}, got {trade[0]}'
+            assert trade[1] == amounts[i], f'amounts error, expected {amounts[i]}, got {trade[1]}'
+            assert trade[2] == instruments[i], f'amount error, expected {instruments[i]}, got {trade[2]}'
+            assert trade[3] == timestamps[i], f'timestamp error, expected {timestamps[i]}, got {trade[3]}'
+            assert trade[4] == ids.Operation.trade, f'operation error, expected {ids.Operation.trade}, got {trade[4]}'
+    %}
+    return ();
+}
+
+func loop_trade{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    amounts_len: felt,
+    amounts: felt*,
+    instruments_len: felt,
+    instruments: felt*,
+    ts_len: felt,
+    ts: felt*,
+) {
+    if (amounts_len == 0) {
+        return ();
+    }
+    trade(amount=[amounts], instrument=[instruments], valid_until=[ts]);
+    loop_trade(
+        amounts_len=amounts_len - 1,
+        amounts=amounts + 1,
+        instruments_len=instruments_len - 1,
+        instruments=instruments + 1,
+        ts_len=ts_len - 1,
+        ts=ts + 1,
+    );
+    return ();
+}
 // TEST CLOSE
 
 @external
@@ -108,7 +174,7 @@ func test_close{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}
         for i in range(count):
             close = load(context.self_address, "storage_operations_queue", "QueuedOperation", key=[i])
             assert close[0] == ids.ACCOUNT, f'caller error, expected {ids.ACCOUNT}, got {close[0]}'
-            assert close[2] == instruments[i], f'amount error, expected {instruments[i]}, got {close[1]}'
+            assert close[2] == instruments[i], f'amount error, expected {instruments[i]}, got {close[2]}'
             assert close[3] == timestamps[i], f'timestamp error, expected {timestamps[i]}, got {close[3]}'
             assert close[4] == ids.Operation.close, f'operation error, expected {ids.Operation.close}, got {close[4]}'
     %}

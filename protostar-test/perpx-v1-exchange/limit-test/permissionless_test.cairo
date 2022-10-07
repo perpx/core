@@ -156,6 +156,86 @@ func test_add_collateral_limit{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, r
 }
 
 @external
+func test_trade_limit_1{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    %{
+        start_prank(0) 
+        expect_revert(error_message=f'caller is the zero address')
+    %}
+    trade(amount=1, instrument=1, valid_until=1);
+    return ();
+}
+
+@external
+func test_trade_limit_2{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    %{
+        start_prank(ids.ACCOUNT) 
+        expect_revert(error_message=f'trading amount limited to {ids.LIMIT}')
+    %}
+    trade(amount=0, instrument=1, valid_until=1);
+    return ();
+}
+
+@external
+func test_trade_limit_3{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    %{
+        start_prank(ids.ACCOUNT) 
+        expect_revert(error_message=f'trading amount limited to {ids.LIMIT}')
+    %}
+    trade(amount=LIMIT + 1, instrument=1, valid_until=1);
+    return ();
+}
+
+@external
+func test_trade_limit_4{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    %{
+        start_prank(ids.ACCOUNT) 
+        expect_revert(error_message=f'invalid expiration timestamp')
+    %}
+    trade(amount=1, instrument=1, valid_until=0);
+    return ();
+}
+
+@external
+func test_trade_limit_5{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    %{
+        start_prank(ids.ACCOUNT) 
+        expect_revert(error_message=f'invalid expiration timestamp')
+    %}
+    trade(amount=1, instrument=1, valid_until=LIMIT + 1);
+    return ();
+}
+
+@external
+func test_close_limit_1{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    %{
+        start_prank(0) 
+        expect_revert(error_message=f'caller is the zero address')
+    %}
+    close(instrument=1, valid_until=1);
+    return ();
+}
+
+@external
+func test_close_limit_2{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    %{
+        start_prank(ids.ACCOUNT) 
+        expect_revert(error_message=f'invalid expiration timestamp')
+    %}
+    close(instrument=1, valid_until=0);
+    return ();
+}
+
+@external
+func test_close_limit_3{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    %{
+        start_prank(ids.ACCOUNT) 
+        expect_revert(error_message=f'invalid expiration timestamp')
+    %}
+    close(instrument=1, valid_until=LIMIT + 1);
+    return ();
+}
+
+@external
 func test_remove_collateral_limit_1{
     syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr
 }() {
@@ -212,35 +292,5 @@ func test_remove_collateral_limit_5{
         expect_revert(error_message=f'invalid expiration timestamp')
     %}
     remove_collateral(amount=1, valid_until=LIMIT + 1);
-    return ();
-}
-
-@external
-func test_close_limit_1{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
-    %{
-        start_prank(0) 
-        expect_revert(error_message=f'caller is the zero address')
-    %}
-    close(instrument=1, valid_until=1);
-    return ();
-}
-
-@external
-func test_close_limit_2{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
-    %{
-        start_prank(ids.ACCOUNT) 
-        expect_revert(error_message=f'invalid expiration timestamp')
-    %}
-    close(instrument=1, valid_until=0);
-    return ();
-}
-
-@external
-func test_close_limit_3{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
-    %{
-        start_prank(ids.ACCOUNT) 
-        expect_revert(error_message=f'invalid expiration timestamp')
-    %}
-    close(instrument=1, valid_until=LIMIT + 1);
     return ();
 }
