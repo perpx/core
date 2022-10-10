@@ -199,6 +199,35 @@ func _verify_instruments{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_c
     return ();
 }
 
+// @notice Verify instrument is a power of 2 lower than 2**(instrument_count -1)
+// @param instrument The instrument
+func _verify_instrument{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    instrument: felt
+) {
+    alloc_locals;
+    let (count) = storage_instrument_count.read();
+    let (power) = pow(2, count - 1);
+    with_attr error_message("instrument limited to 2**(instrument_count - 1)") {
+        [range_check_ptr] = instrument;
+        assert [range_check_ptr + 1] = power - instrument;
+    }
+    let range_check_ptr = range_check_ptr + 2;
+    return _verify_instrument_loop(instrument=instrument);
+}
+
+// @notice Verify instrument is a power of 2 lower
+// @param instrument The instrument
+func _verify_instrument_loop{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    instrument: felt
+) {
+    if (instrument == 1) {
+        return ();
+    }
+    let (q, r) = unsigned_div_rem(instrument, 2);
+    assert r = 0;
+    return _verify_instrument(q);
+}
+
 // @notice Closes all the users positions
 // @param owner The owner of the positions
 // @param instruments The instruments owned by the owner
