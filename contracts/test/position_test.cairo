@@ -19,25 +19,25 @@ func get_delta_test{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_
 
 @external
 func get_position_test{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
-    address: felt
+    owner: felt, instrument: felt
 ) -> (position: Info) {
-    let (_position) = position(address);
+    let (_position) = Position.position(owner, instrument);
     return (position=_position);
 }
 
 @external
 func update_test{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
-    address: felt, price: felt, amount: felt, fee_bps: felt
+    owner: felt, instrument: felt, price: felt, amount: felt, fees: felt
 ) -> () {
-    update_position(address, price, amount, fee_bps);
+    Position.update_position(owner, instrument, price, amount, fees);
     return ();
 }
 
 @external
 func close_test{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
-    address: felt, price: felt, fee_bps: felt
+    owner: felt, instrument: felt, price: felt, fees: felt
 ) -> () {
-    let (delt) = close_position(address, price, fee_bps);
+    let (delt) = Position.close_position(owner, instrument, price, fees);
     delta.write(delt);
     return ();
 }

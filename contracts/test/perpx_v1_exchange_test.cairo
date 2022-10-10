@@ -8,7 +8,7 @@ from contracts.perpx_v1_exchange.permissionless import (
 )
 from contracts.perpx_v1_exchange.owners import (
     update_prices,
-    init_prev_prices,
+    update_prev_prices,
     _update_volatility,
     update_margin_parameters,
 )
@@ -36,10 +36,10 @@ func update_prices_test{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_ch
 }
 
 @external
-func init_prev_prices_test{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+func update_prev_prices_test{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
     prev_prices_len: felt, prev_prices: felt*
 ) -> () {
-    init_prev_prices(prev_prices_len=prev_prices_len, prev_prices=prev_prices);
+    update_prev_prices(prev_prices_len=prev_prices_len, prev_prices=prev_prices);
     return ();
 }
 

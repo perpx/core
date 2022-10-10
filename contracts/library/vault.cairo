@@ -4,13 +4,12 @@ from starkware.cairo.common.cairo_builtins import HashBuiltin
 from starkware.cairo.common.math import unsigned_div_rem, assert_nn
 from starkware.starknet.common.syscalls import get_block_timestamp
 
-from contracts.constants.perpx_constants import SHARE_PRECISION, LIQUIDITY_PRECISION
+from contracts.constants.perpx_constants import SHARE_PRECISION, LIQUIDITY_PRECISION, LIMIT
 
 //
 // Structure
 //
 struct Stake {
-    amount: felt,
     shares: felt,
     timestamp: felt,
 }
@@ -34,26 +33,6 @@ namespace Vault {
     //
     // Functions
     //
-    func view_shares{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
-        instrument: felt
-    ) -> (shares: felt) {
-        let (shares) = storage_shares.read(instrument);
-        return (shares=shares);
-    }
-
-    func view_user_stake{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
-        owner: felt, instrument: felt
-    ) -> (stake: Stake) {
-        let (stake) = storage_user_stake.read(owner, instrument);
-        return (stake=stake);
-    }
-
-    func view_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
-        instrument: felt
-    ) -> (liquidity: felt) {
-        let (_liquidity) = storage_liquidity.read(instrument);
-        return (liquidity=_liquidity);
-    }
 
     // @notice Provide liquidity to the pool for target instrument
     // @dev Formula to implement is amount*shares/liquidity
@@ -64,6 +43,7 @@ namespace Vault {
         amount: felt, owner: felt, instrument: felt
     ) -> () {
         alloc_locals;
+        local limit = LIMIT;
 
         let (shares) = storage_shares.read(instrument);
         let (user_stake) = storage_user_stake.read(owner, instrument);
@@ -75,10 +55,13 @@ namespace Vault {
         if (shares == 0) {
             let (factor, _) = unsigned_div_rem(SHARE_PRECISION, LIQUIDITY_PRECISION);
             let init_shares = amount * factor;
+            with_attr error_message("shares limited to {limit}") {
+                assert [range_check_ptr] = init_shares;
+                assert [range_check_ptr + 1] = LIMIT - init_shares;
+            }
+            let range_check_ptr = range_check_ptr + 2;
             storage_shares.write(instrument, init_shares);
-            storage_user_stake.write(
-                owner, instrument, Stake(amount=amount, shares=init_shares, timestamp=ts)
-            );
+            storage_user_stake.write(owner, instrument, Stake(shares=init_shares, timestamp=ts));
             storage_liquidity.write(instrument, new_liquidity);
             return ();
         }
@@ -86,16 +69,17 @@ namespace Vault {
         let temp = amount * shares;
         let (shares_increase, _) = unsigned_div_rem(temp, liquidity);
         tempvar new_user_shares = user_stake.shares + shares_increase;
-        tempvar new_amount = user_stake.amount + amount;
-        storage_user_stake.write(
-            owner, instrument, Stake(amount=new_amount, shares=new_user_shares, timestamp=ts)
-        );
-
         tempvar new_shares = shares + shares_increase;
+        with_attr error_message("shares limited to {limit}") {
+            assert [range_check_ptr] = new_shares;
+            assert [range_check_ptr + 1] = LIMIT - new_shares;
+        }
+        let range_check_ptr = range_check_ptr + 2;
+
         storage_shares.write(instrument, new_shares);
+        storage_user_stake.write(owner, instrument, Stake(shares=new_user_shares, timestamp=ts));
 
         storage_liquidity.write(instrument, new_liquidity);
-
         return ();
     }
 
@@ -107,32 +91,22 @@ namespace Vault {
         amount: felt, owner: felt, instrument: felt
     ) -> () {
         let (user_stake) = storage_user_stake.read(owner, instrument);
-
-        with_attr error_message("null amount") {
-            assert_nn(amount - 1);
-        }
-
-        let new_amount = user_stake.amount - amount;
-        with_attr error_message("insufficient balance") {
-            assert_nn(new_amount);
-        }
-
         let (shares) = storage_shares.read(instrument);
         let (liquidity) = storage_liquidity.read(instrument);
+
+        let temp_user = amount * shares;
+        let (shares_sub, _) = unsigned_div_rem(temp_user, liquidity);
+        let new_user_shares = user_stake.shares - shares_sub;
+
+        with_attr error_message("insufficient balance") {
+            assert_nn(new_user_shares);
+        }
+
         let new_liquidity = liquidity - amount;
-
-        let temp_user = amount * user_stake.shares;
-        let (user_shares_sub, _) = unsigned_div_rem(temp_user, user_stake.amount);
-        let new_user_shares = user_stake.shares - user_shares_sub;
-
-        let temp_share = amount * shares;
-        let (pool_shares_sub, _) = unsigned_div_rem(temp_share, liquidity);
-        let new_pool_shares = shares - pool_shares_sub;
+        let new_pool_shares = shares - shares_sub;
 
         storage_user_stake.write(
-            owner,
-            instrument,
-            Stake(amount=new_amount, shares=new_user_shares, timestamp=user_stake.timestamp),
+            owner, instrument, Stake(shares=new_user_shares, timestamp=user_stake.timestamp)
         );
         storage_shares.write(instrument, new_pool_shares);
         storage_liquidity.write(instrument, new_liquidity);

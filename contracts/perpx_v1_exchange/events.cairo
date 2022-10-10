@@ -15,7 +15,7 @@ func Close(owner: felt, instrument: felt, price: felt, fee: felt, delta: felt) {
 }
 
 @event
-func Liquidate(owner: felt) {
+func Liquidate(owner: felt, instruments: felt) {
 }
 
 @event

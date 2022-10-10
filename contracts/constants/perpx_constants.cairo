@@ -30,3 +30,12 @@ const LIQUIDITY_PRECISION = 10 ** 6;
 
 // The precision for the volatility fees
 const VOLATILITY_FEE_RATE_PRECISION = 10 ** 4;
+
+// The maximum amount paid out to a liquidator
+const MAX_LIQUIDATOR_PAY_OUT = 10 ** 8;
+
+// The minimum amount paid out to a liquidator
+const MIN_LIQUIDATOR_PAY_OUT = 10 ** 7;
+
+// The maximum size of the queues
+const MAX_QUEUE_SIZE = 10 ** 3;

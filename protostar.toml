@@ -6,6 +6,9 @@ libs_path = "lib"
 
 ["protostar.build"]
 output = "./starknet-artifacts/protostar"
+cairo-path = [
+    "./lib/cairo_contracts/src"
+]
 
 ["protostar.contracts"]
 exchange=[
@@ -20,7 +23,8 @@ vault_test = [
 
 ["protostar.test"]
 cairo-path = [
-    "./protostar-test/"
+    "./protostar-test/",
+    "./lib/cairo_contracts/src"
 ]
 ignore = [
     "starknet-artifacts"
