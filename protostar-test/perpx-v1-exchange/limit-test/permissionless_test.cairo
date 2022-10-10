@@ -206,6 +206,18 @@ func test_trade_limit_5{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_ch
 }
 
 @external
+func test_trade_limit_6{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    %{
+        start_prank(ids.ACCOUNT) 
+        store(context.self_address, "storage_queue_limit", [100])
+        store(context.self_address, "storage_operations_count", [100])
+        expect_revert(error_message=f'queue size limit reached')
+    %}
+    trade(amount=1, instrument=1, valid_until=1);
+    return ();
+}
+
+@external
 func test_close_limit_1{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
     %{
         start_prank(0) 
@@ -232,6 +244,18 @@ func test_close_limit_3{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_ch
         expect_revert(error_message=f'invalid expiration timestamp')
     %}
     close(instrument=1, valid_until=LIMIT + 1);
+    return ();
+}
+
+@external
+func test_close_limit_4{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    %{
+        start_prank(ids.ACCOUNT) 
+        store(context.self_address, "storage_queue_limit", [100])
+        store(context.self_address, "storage_operations_count", [100])
+        expect_revert(error_message=f'queue size limit reached')
+    %}
+    close(instrument=1, valid_until=1);
     return ();
 }
 
@@ -292,5 +316,19 @@ func test_remove_collateral_limit_5{
         expect_revert(error_message=f'invalid expiration timestamp')
     %}
     remove_collateral(amount=1, valid_until=LIMIT + 1);
+    return ();
+}
+
+@external
+func test_remove_collateral_limit_6{
+    syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr
+}() {
+    %{
+        start_prank(ids.ACCOUNT) 
+        store(context.self_address, "storage_queue_limit", [100])
+        store(context.self_address, "storage_operations_count", [100])
+        expect_revert(error_message=f'queue size limit reached')
+    %}
+    remove_collateral(amount=1, valid_until=1);
     return ();
 }
