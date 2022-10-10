@@ -24,7 +24,11 @@ from contracts.perpx_v1_exchange.owners import (
     update_prev_prices,
     _update_prev_prices,
 )
-from contracts.perpx_v1_exchange.storage import storage_token, storage_instrument_count
+from contracts.perpx_v1_exchange.storage import (
+    storage_token,
+    storage_instrument_count,
+    storage_queue_limit,
+)
 
 //
 // Constructor
@@ -34,14 +38,23 @@ from contracts.perpx_v1_exchange.storage import storage_token, storage_instrumen
 // @param owner The contract owner
 // @param token The collateral token address
 // @param instrument_count The number of instruments
+// @param queue_limit The limit of orders in the operation queue
+// @param prev_prices_len The length of the previous prices array
+// @param prev_prices The previous prices array
 @constructor
 func constructor{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
-    owner: felt, token: felt, instrument_count: felt, prev_prices_len: felt, prev_prices: felt*
+    owner: felt,
+    token: felt,
+    instrument_count: felt,
+    queue_limit: felt,
+    prev_prices_len: felt,
+    prev_prices: felt*,
 ) {
     assert instrument_count = prev_prices_len;
     init_access_control(owner);
     storage_token.write(token);
     storage_instrument_count.write(instrument_count);
+    storage_queue_limit.write(queue_limit);
     _update_prev_prices(prev_prices_len=prev_prices_len, prev_prices=prev_prices, mult=1);
     return ();
 }

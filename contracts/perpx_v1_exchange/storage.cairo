@@ -39,6 +39,10 @@ func storage_operations_count() -> (count: felt) {
 }
 
 @storage_var
+func storage_queue_limit() -> (limit: felt) {
+}
+
+@storage_var
 func storage_token() -> (address: felt) {
 }
 
