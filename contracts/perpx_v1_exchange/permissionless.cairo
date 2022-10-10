@@ -13,6 +13,7 @@ from contracts.perpx_v1_exchange.storage import (
     storage_token,
     storage_operations_queue,
     storage_operations_count,
+    storage_queue_limit,
 )
 from contracts.perpx_v1_exchange.internals import (
     _calculate_pnl,
@@ -62,6 +63,8 @@ func trade{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
 ) -> () {
     alloc_locals;
     local limit = LIMIT;
+    let (count) = storage_operations_count.read();
+    let (queue_limit) = storage_queue_limit.read();
     // check the limits
     let (local caller) = get_caller_address();
     with_attr error_message("caller is the zero address") {
@@ -77,8 +80,10 @@ func trade{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
         assert [range_check_ptr + 1] = LIMIT - valid_until;
     }
     let range_check_ptr = range_check_ptr + 2;
+    with_attr error_message("queue size limit reached") {
+        assert_le(count + 1, queue_limit);
+    }
 
-    let (count) = storage_operations_count.read();
     storage_operations_queue.write(
         count,
         QueuedOperation(caller=caller, amount=amount, instrument=instrument, valid_until=valid_until, operation=Operation.trade),
@@ -95,6 +100,8 @@ func close{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
 ) {
     alloc_locals;
     local limit = LIMIT;
+    let (count) = storage_operations_count.read();
+    let (queue_limit) = storage_queue_limit.read();
     // check the limits
     let (local caller) = get_caller_address();
     with_attr error_message("caller is the zero address") {
@@ -105,8 +112,10 @@ func close{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
         assert [range_check_ptr + 1] = LIMIT - valid_until;
     }
     let range_check_ptr = range_check_ptr + 2;
+    with_attr error_message("queue size limit reached") {
+        assert_le(count + 1, queue_limit);
+    }
 
-    let (count) = storage_operations_count.read();
     storage_operations_queue.write(
         count,
         QueuedOperation(caller=caller, amount=0, instrument=instrument, valid_until=valid_until, operation=Operation.close),
@@ -239,13 +248,14 @@ func add_collateral{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_
 // @notice Add the collateral removal to the operations queue
 // @param amount The change in collateral
 // @param valid_until The validity timestamp of the collateral removal
-// TODO add max queue size
 @external
 func remove_collateral{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
     amount: felt, valid_until: felt
 ) {
     alloc_locals;
     local limit = LIMIT;
+    let (count) = storage_operations_count.read();
+    let (queue_limit) = storage_queue_limit.read();
     // check the limits
     let (local caller) = get_caller_address();
     with_attr error_message("caller is the zero address") {
@@ -261,8 +271,10 @@ func remove_collateral{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_che
         assert [range_check_ptr + 1] = LIMIT - valid_until;
     }
     let range_check_ptr = range_check_ptr + 2;
+    with_attr error_message("queue size limit reached") {
+        assert_le(count + 1, queue_limit);
+    }
 
-    let (count) = storage_operations_count.read();
     storage_operations_queue.write(
         count,
         QueuedOperation(caller=caller, amount=amount, instrument=0, valid_until=valid_until, operation=Operation.remove_collateral),
