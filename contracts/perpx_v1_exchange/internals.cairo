@@ -223,6 +223,9 @@ func _verify_instrument_loop{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, ran
     if (instrument == 1) {
         return ();
     }
+    if (instrument == 0) {
+        return ();
+    }
     let (q, r) = unsigned_div_rem(instrument, 2);
     assert r = 0;
     return _verify_instrument(q);
