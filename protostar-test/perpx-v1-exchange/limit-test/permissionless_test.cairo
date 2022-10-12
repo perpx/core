@@ -65,6 +65,8 @@ func __setup__{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
     %{
         store(ids.address, "ERC20_balances", [ids.RANGE_CHECK_BOUND - 1, 0], key=[ids.ACCOUNT])
         store(ids.address, "storage_token", [ids.address])
+        store(ids.address, "storage_instrument_count", [ids.INSTRUMENT_COUNT])
+        store(ids.address, "storage_queue_limit", [100])
         context.self_address = ids.address
     %}
 
@@ -74,13 +76,13 @@ func __setup__{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
 // TEST ADD LIQUIDITY
 
 @external
-func test_add_liquidity_limit{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+func test_add_liquidity_limit_1{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
     alloc_locals;
     local address;
     local amount;
     %{ ids.address = context.self_address %}
 
-    // test case: amount = LIMIT//100+1
+    // test case: amount = LIMIT//100 + 1
     // prank the approval and the add liquidity calls
     %{
         ids.amount = ids.LIMIT//100+1
@@ -93,10 +95,30 @@ func test_add_liquidity_limit{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, ra
     return ();
 }
 
+@external
+func test_add_liquidity_limit_2{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    alloc_locals;
+    local instrument;
+    local address;
+    %{
+        ids.instrument = 2**(ids.INSTRUMENT_COUNT - 1) + 1 
+        ids.address = context.self_address
+    %}
+
+    // test case: incorrect instrument
+    // prank the approval and the add liquidity calls
+    %{ start_prank(ids.ACCOUNT) %}
+    ERC20.approve(spender=ACCOUNT, amount=Uint256(2 * LIMIT + 1, 0));
+
+    %{ expect_revert(error_message="instrument limited to 2**(instrument_count - 1)") %}
+    add_liquidity(amount=1, instrument=instrument);
+    return ();
+}
+
 // TEST REMOVE LIQUIDITY
 
 @external
-func test_remove_liquidity_limit{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+func test_remove_liquidity_limit_1{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
     ) {
     alloc_locals;
     local address;
@@ -121,6 +143,27 @@ func test_remove_liquidity_limit{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*,
     %{ expect_revert(error_message=f'liquidity decrease limited to {ids.LIMIT}') %}
     remove_liquidity(amount=0, instrument=INSTRUMENT);
 
+    return ();
+}
+
+@external
+func test_remove_liquidity_limit_2{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    ) {
+    alloc_locals;
+    local instrument;
+    local address;
+    %{
+        ids.instrument = 2**(ids.INSTRUMENT_COUNT - 1) + 1 
+        ids.address = context.self_address
+    %}
+
+    // test case: incorrect instrument
+    // prank the approval and the add liquidity calls
+    %{ start_prank(ids.ACCOUNT) %}
+    ERC20.approve(spender=ACCOUNT, amount=Uint256(2 * LIMIT + 1, 0));
+
+    %{ expect_revert(error_message="instrument limited to 2**(instrument_count - 1)") %}
+    remove_liquidity(amount=1, instrument=instrument);
     return ();
 }
 
@@ -157,6 +200,7 @@ func test_add_collateral_limit{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, r
 
 @external
 func test_trade_limit_1{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    // test case: caller = 0
     %{
         start_prank(0) 
         expect_revert(error_message=f'caller is the zero address')
@@ -167,6 +211,7 @@ func test_trade_limit_1{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_ch
 
 @external
 func test_trade_limit_2{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    // test case: amount = 0
     %{
         start_prank(ids.ACCOUNT) 
         expect_revert(error_message=f'trading amount limited to {ids.LIMIT}')
@@ -177,6 +222,7 @@ func test_trade_limit_2{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_ch
 
 @external
 func test_trade_limit_3{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    // test case: amount = LIMIT + 1
     %{
         start_prank(ids.ACCOUNT) 
         expect_revert(error_message=f'trading amount limited to {ids.LIMIT}')
@@ -187,6 +233,7 @@ func test_trade_limit_3{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_ch
 
 @external
 func test_trade_limit_4{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    // test case: valid_until = 0
     %{
         start_prank(ids.ACCOUNT) 
         expect_revert(error_message=f'invalid expiration timestamp')
@@ -197,6 +244,7 @@ func test_trade_limit_4{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_ch
 
 @external
 func test_trade_limit_5{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    // test case: valid_until = LIMIT + 1
     %{
         start_prank(ids.ACCOUNT) 
         expect_revert(error_message=f'invalid expiration timestamp')
@@ -207,9 +255,9 @@ func test_trade_limit_5{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_ch
 
 @external
 func test_trade_limit_6{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    // test case: storage_operations_count = storage_queue_limit
     %{
         start_prank(ids.ACCOUNT) 
-        store(context.self_address, "storage_queue_limit", [100])
         store(context.self_address, "storage_operations_count", [100])
         expect_revert(error_message=f'queue size limit reached')
     %}
@@ -218,7 +266,22 @@ func test_trade_limit_6{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_ch
 }
 
 @external
+func test_trade_limit_7{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    // test case: incorrect instrument
+    alloc_locals;
+    local instrument;
+    %{
+        ids.instrument = 2**(ids.INSTRUMENT_COUNT) + 1 
+        start_prank(ids.ACCOUNT) 
+        expect_revert(error_message="instrument limited to 2**(instrument_count - 1)")
+    %}
+    trade(amount=1, instrument=instrument, valid_until=1);
+    return ();
+}
+
+@external
 func test_close_limit_1{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    // test case: caller = 0
     %{
         start_prank(0) 
         expect_revert(error_message=f'caller is the zero address')
@@ -229,6 +292,7 @@ func test_close_limit_1{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_ch
 
 @external
 func test_close_limit_2{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    // test case: valid_until = 0
     %{
         start_prank(ids.ACCOUNT) 
         expect_revert(error_message=f'invalid expiration timestamp')
@@ -239,6 +303,7 @@ func test_close_limit_2{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_ch
 
 @external
 func test_close_limit_3{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    // test case: valid_until = LIMIT + 1
     %{
         start_prank(ids.ACCOUNT) 
         expect_revert(error_message=f'invalid expiration timestamp')
@@ -249,9 +314,9 @@ func test_close_limit_3{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_ch
 
 @external
 func test_close_limit_4{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    // test case: storage_operations_count = storage_queue_limit
     %{
         start_prank(ids.ACCOUNT) 
-        store(context.self_address, "storage_queue_limit", [100])
         store(context.self_address, "storage_operations_count", [100])
         expect_revert(error_message=f'queue size limit reached')
     %}
@@ -260,9 +325,24 @@ func test_close_limit_4{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_ch
 }
 
 @external
+func test_close_limit_5{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    // test case: incorrect instrument
+    alloc_locals;
+    local instrument;
+    %{
+        ids.instrument = 2**(ids.INSTRUMENT_COUNT) + 1 
+        start_prank(ids.ACCOUNT) 
+        expect_revert(error_message="instrument limited to 2**(instrument_count - 1)")
+    %}
+    close(instrument=instrument, valid_until=1);
+    return ();
+}
+
+@external
 func test_remove_collateral_limit_1{
     syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr
 }() {
+    // test case: caller = 0
     %{
         start_prank(0) 
         expect_revert(error_message=f'caller is the zero address')
@@ -275,6 +355,7 @@ func test_remove_collateral_limit_1{
 func test_remove_collateral_limit_2{
     syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr
 }() {
+    // test case: amount = 0
     %{
         start_prank(ids.ACCOUNT) 
         expect_revert(error_message=f'collateral decrease limited to {ids.LIMIT}')
@@ -287,6 +368,7 @@ func test_remove_collateral_limit_2{
 func test_remove_collateral_limit_3{
     syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr
 }() {
+    // test case: amount = LIMIT + 1
     %{
         start_prank(ids.ACCOUNT) 
         expect_revert(error_message=f'collateral decrease limited to {ids.LIMIT}')
@@ -299,6 +381,7 @@ func test_remove_collateral_limit_3{
 func test_remove_collateral_limit_4{
     syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr
 }() {
+    // test case: valid_until = 0
     %{
         start_prank(ids.ACCOUNT) 
         expect_revert(error_message=f'invalid expiration timestamp')
@@ -311,6 +394,7 @@ func test_remove_collateral_limit_4{
 func test_remove_collateral_limit_5{
     syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr
 }() {
+    // test case: valid_until = LIMIT + 1
     %{
         start_prank(ids.ACCOUNT) 
         expect_revert(error_message=f'invalid expiration timestamp')
@@ -323,9 +407,9 @@ func test_remove_collateral_limit_5{
 func test_remove_collateral_limit_6{
     syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr
 }() {
+    // test case: storage_operations_count = storage_queue_limit
     %{
         start_prank(ids.ACCOUNT) 
-        store(context.self_address, "storage_queue_limit", [100])
         store(context.self_address, "storage_operations_count", [100])
         expect_revert(error_message=f'queue size limit reached')
     %}

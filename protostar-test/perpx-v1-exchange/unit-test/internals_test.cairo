@@ -107,7 +107,7 @@ func test_verify_instrument{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, rang
         import math
         seed(ids.random)
         # generate random instruments and store the instrument count
-        ids.instrument = randint(1, 2**ids.INSTRUMENT_COUNT - 1)
+        ids.instrument = randint(0, 2**ids.INSTRUMENT_COUNT - 1)
         if not math.log2(ids.instrument).is_integer():
             expect_revert()
         if ids.instruments > 2**(ids.INSTRUMENT_COUNT - 1):
