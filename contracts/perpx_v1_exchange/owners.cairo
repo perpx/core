@@ -2,11 +2,12 @@
 
 from starkware.cairo.common.cairo_builtins import HashBuiltin
 from starkware.starknet.common.syscalls import get_caller_address, get_contract_address
-from starkware.cairo.common.math import unsigned_div_rem
+from starkware.cairo.common.math import unsigned_div_rem, sign
 from starkware.cairo.common.math_cmp import is_le, is_nn
 from starkware.starknet.common.syscalls import get_block_timestamp
 from starkware.cairo.common.uint256 import Uint256
 
+from contracts.perpx_v1_instrument import storage_longs, storage_shorts
 from contracts.perpx_v1_exchange.storage import (
     storage_instrument_count,
     storage_user_instruments,
@@ -24,9 +25,14 @@ from contracts.perpx_v1_exchange.internals import (
     _calculate_exit_fees,
     _calculate_fees,
     _calculate_margin_requirement,
+    _calculate_margin_requirement_inner,
+    _verify_length,
+    _verify_instruments,
 )
 from contracts.perpx_v1_exchange.structures import Parameter, QueuedOperation
-from contracts.perpx_v1_exchange.internals import _verify_length, _verify_instruments
+from contracts.library.position import Position, Info
+from contracts.library.fees import Fees
+from contracts.library.vault import storage_liquidity
 from contracts.constants.perpx_constants import LIQUIDITY_PRECISION
 from contracts.utils.access_control import assert_only_owner
 from lib.cairo_math_64x61_git.contracts.cairo_math_64x61.math64x61 import Math64x61
@@ -274,11 +280,76 @@ func _execute_queued_operations_loop{
 // @param caller The user trading
 // @param amount The amount of the trade (precision: 6)
 // @param instrument The instrument to trade
-// TODO implement
 // TODO test
 func _trade{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
     caller: felt, amount: felt, instrument: felt
 ) {
+    alloc_locals;
+    // get current margin requirements
+    let (local instruments) = storage_user_instruments.read(caller);
+    let (collateral) = storage_collateral.read(caller);
+    let (pnl) = _calculate_pnl(owner=caller, instruments=instruments, mult=1);
+    let (fees) = _calculate_fees(owner=caller, instruments=instruments, mult=1);
+    let (exit_fees) = _calculate_exit_fees(owner=caller, instruments=instruments, mult=1);
+    tempvar margin = collateral + pnl - fees - exit_fees;
+    let (min_margin) = _calculate_margin_requirement(owner=caller, instruments=instruments, mult=1);
+
+    // get margin change
+    let (price) = storage_oracles.read(instrument);
+    let (parameters: Parameter) = storage_margin_parameters.read(instrument);
+    let (volatility) = storage_volatility.read(instrument);
+    let min_margin_change = _calculate_margin_requirement_inner(
+        size=amount, price=price, k=parameters.k, volatility=volatility
+    );
+
+    // get trading fees
+    let (position: Info) = Position.position(owner=caller, instrument=instrument);
+    let (longs) = storage_longs.read(instrument);
+    let (shorts) = storage_shorts.read(instrument);
+    let (liquidity) = storage_liquidity.read(instrument);
+    let (fees) = Fees.compute_fees(
+        price=price, amount=amount, long=longs * price, short=shorts * price, liquidity=liquidity
+    );
+
+    // if no prior positions, check margin requirement and update position
+    if (position.size == 0) {
+        let valid_margin = is_le(min_margin + min_margin_change, margin);
+        if (valid_margin == 0) {
+            return ();
+        }
+        Position.update_position(
+            owner=caller, instrument=instrument, price=price, amount=amount, fees=fees
+        );
+        return ();
+    }
+
+    // if prior position, check trade direction, margin requirement and update position
+    let sign_size = sign(position.size);
+    let sign_amount = sign(amount);
+    if (sign_size == sign_amount) {
+        let valid_margin = is_le(min_margin + min_margin_change, margin);
+        if (valid_margin == 0) {
+            return ();
+        }
+        tempvar range_check_ptr = range_check_ptr;
+    } else {
+        tempvar range_check_ptr = range_check_ptr;
+    }
+
+    // remove instrument and update collateral if trade closes the position
+    if (amount + position.size == 0) {
+        let (collateral_change) = Position.close_position(
+            owner=caller, instrument=instrument, price=price, fees=fees
+        );
+        let (collateral) = storage_collateral.read(caller);
+        storage_collateral.write(caller, collateral + collateral_change);
+        storage_user_instruments.write(caller, instruments - instrument);
+        return ();
+    }
+
+    Position.update_position(
+        owner=caller, instrument=instrument, price=price, amount=amount, fees=fees
+    );
     return ();
 }
 
