@@ -128,28 +128,42 @@ func _calculate_margin_requirement{syscall_ptr: felt*, pedersen_ptr: HashBuiltin
         let (parameters: Parameter) = storage_margin_parameters.read(mult);
         let (volatility) = storage_volatility.read(mult);
 
-        let sigma = Math64x61.sqrt(volatility);
-        let temp = Math64x61.mul(parameters.k, sigma);
-        let temp = Math64x61.exp(temp);
-        let temp = Math64x61.sub(temp, Math64x61.ONE);
-        let limit = Math64x61.div(Math64x61.ONE, 100 * Math64x61.ONE);
-        let margin_factor = Math64x61.max(temp, limit);
-
-        let price64x61 = Math64x61.fromFelt(price);
-        let size64x61 = Math64x61.fromFelt(position.size);
-        let price64x61 = Math64x61.div(price64x61, LIQUIDITY_PRECISION * Math64x61.ONE);
-        let size64x61 = Math64x61.div(size64x61, LIQUIDITY_PRECISION * Math64x61.ONE);
-        let size64x61 = abs_value(size64x61);
-
-        let temp = Math64x61.mul(price64x61, size64x61);
-        let temp = Math64x61.mul(temp, margin_factor);
-        let margin_limit = _64x61_to_liquidity_precision(temp);
-
+        let margin_limit = _calculate_margin_requirement_inner(
+            size=position.size, price=price, k=parameters.k, volatility=volatility
+        );
         let (m) = _calculate_margin_requirement(owner=owner, instruments=q, mult=mult * 2);
         return (margin_requirement=m + margin_limit);
     }
     let (m) = _calculate_margin_requirement(owner=owner, instruments=q, mult=mult * 2);
     return (margin_requirement=m);
+}
+
+// @notice Calculates the margin requirement
+// @param size The size of the position
+// @param price The price of the instrument
+// @param parameters The k and lambda parameters used in margin calculation
+// @param volatility The volatility of the instrument
+// @return The margin requirement
+func _calculate_margin_requirement_inner{
+    syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr
+}(size: felt, price: felt, k: felt, volatility: felt) -> felt {
+    let sigma = Math64x61.sqrt(volatility);
+    let temp = Math64x61.mul(k, sigma);
+    let temp = Math64x61.exp(temp);
+    let temp = Math64x61.sub(temp, Math64x61.ONE);
+    let limit = Math64x61.div(Math64x61.ONE, 100 * Math64x61.ONE);
+    let margin_factor = Math64x61.max(temp, limit);
+
+    let price64x61 = Math64x61.fromFelt(price);
+    let size64x61 = Math64x61.fromFelt(size);
+    let price64x61 = Math64x61.div(price64x61, LIQUIDITY_PRECISION * Math64x61.ONE);
+    let size64x61 = Math64x61.div(size64x61, LIQUIDITY_PRECISION * Math64x61.ONE);
+    let size64x61 = abs_value(size64x61);
+
+    let temp = Math64x61.mul(price64x61, size64x61);
+    let temp = Math64x61.mul(temp, margin_factor);
+    let margin_limit = _64x61_to_liquidity_precision(temp);
+    return margin_limit;
 }
 
 // @notice Converts a felt using signed 64.61-bit fixed point
