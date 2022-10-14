@@ -75,6 +75,8 @@ func __setup__{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
     %{
         store(ids.address, "ERC20_balances", [ids.RANGE_CHECK_BOUND - 1, 0], key=[ids.ACCOUNT])
         store(ids.address, "storage_token", [ids.address])
+        store(ids.address, "storage_instrument_count", [ids.INSTRUMENT_COUNT])
+        store(ids.address, "storage_queue_limit", [100])
         context.self_address = ids.address 
         max_examples(200)
     %}

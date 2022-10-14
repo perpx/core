@@ -59,10 +59,12 @@ def calculate_margin_requirement(volatility, k, size):
     return np.sum(np.multiply(size, l))
 
 def calculate_exit_fees(prices, amounts, longs, shorts, liquidity, fee_rate, fee_precision):
-    imbalance_fee_function = lambda p, a, l, s, n: p*a*(2*l*p + p*a - 2*s*p)//(2*n)
-    imbalance_exit_fees = [imbalance_fee_function(prices[i], -amounts[i], longs[i], shorts[i], liquidity[i]) for i in range(len(prices))]
+    imbalance_exit_fees = [calculate_imbalance_fees(prices[i], -amounts[i], longs[i], shorts[i], liquidity[i]) for i in range(len(prices))]
     volatility_exit_fees = sum([abs(x) * fee_rate // fee_precision for x in imbalance_exit_fees])
     return sum(imbalance_exit_fees) + volatility_exit_fees
+
+def calculate_imbalance_fees(price, amount, longs, shorts, liquidity):
+    return price*amount*(2*longs*price + price*amount - 2*shorts*price)//(2*liquidity)
 
 def signed_int(value):
     return value if value <= PRIME/2 else -(PRIME - value)

@@ -12,6 +12,7 @@ from contracts.constants.perpx_constants import (
 from contracts.perpx_v1_exchange.internals import (
     _verify_length,
     _verify_instruments,
+    _verify_instrument,
     _calculate_pnl,
     _calculate_fees,
     _calculate_exit_fees,
@@ -90,6 +91,29 @@ func test_verify_instruments{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, ran
         store(context.self_address, "storage_instrument_count", [ids.INSTRUMENT_COUNT])
     %}
     _verify_instruments(instruments=instruments);
+    return ();
+}
+
+// TEST VERIFY INSTRUMENT
+
+@external
+func test_verify_instrument{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    random: felt
+) {
+    alloc_locals;
+    local instrument;
+    %{
+        from random import randint, seed
+        import math
+        seed(ids.random)
+        # generate random instruments and store the instrument count
+        ids.instrument = randint(0, 2**ids.INSTRUMENT_COUNT - 1)
+        if not math.log2(ids.instrument).is_integer():
+            expect_revert()
+        if ids.instruments > 2**(ids.INSTRUMENT_COUNT - 1):
+            expect_revert(error_message="instrument limited to 2**(instrument_count - 1)")
+    %}
+    _verify_instrument(instrument=instrument);
     return ();
 }
 

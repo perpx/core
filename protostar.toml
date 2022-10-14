@@ -1,30 +1,24 @@
 ["protostar.config"]
-protostar_version = "0.3.2"
+protostar_version = "0.4.2"
 
 ["protostar.project"]
 libs_path = "lib"
 
+["protostar.shared_command_configs"]
+cairo-path = ["./lib/cairo_contracts_git/src", "./lib/cairo_math_64x61_git/contracts"]
+
 ["protostar.build"]
 output = "./starknet-artifacts/protostar"
-cairo-path = [
-    "./lib/cairo_contracts/src"
-]
 
 ["protostar.contracts"]
 exchange=[
     "./contracts/perpx_v1_exchange.cairo",
 ]
-exchange_test = [
-    "./contracts/test/perpx_v1_exchange_test.cairo",
-]
-vault_test = [
-    "./contracts/test/vault_test.cairo",
-]
 
 ["protostar.test"]
 cairo-path = [
     "./protostar-test/",
-    "./lib/cairo_contracts/src"
+    "./lib/cairo_contracts_git/src"
 ]
 ignore = [
     "starknet-artifacts"
