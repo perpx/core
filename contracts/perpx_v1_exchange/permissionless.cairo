@@ -67,12 +67,18 @@ func trade{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
     // check the limits
     _verify_instrument(instrument=instrument);
     let (local caller) = get_caller_address();
+    let (position: Info) = Position.position(caller, instrument);
     with_attr error_message("caller is the zero address") {
         assert_not_zero(caller);
     }
     with_attr error_message("trading amount limited to {limit}") {
         assert [range_check_ptr] = amount - 1;
         assert [range_check_ptr + 1] = LIMIT - amount;
+    }
+    let range_check_ptr = range_check_ptr + 2;
+    with_attr error_message("total position size limited to {limit}") {
+        assert [range_check_ptr] = position.size + amount - 1;
+        assert [range_check_ptr + 1] = LIMIT - amount - position.size;
     }
     let range_check_ptr = range_check_ptr + 2;
     with_attr error_message("invalid expiration timestamp") {
