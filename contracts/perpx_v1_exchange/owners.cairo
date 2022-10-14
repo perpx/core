@@ -280,7 +280,6 @@ func _execute_queued_operations_loop{
 // @param caller The user trading
 // @param amount The amount of the trade (precision: 6)
 // @param instrument The instrument to trade
-// TODO test
 func _trade{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
     caller: felt, amount: felt, instrument: felt
 ) {
@@ -356,11 +355,36 @@ func _trade{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
 // @notice Execute the closing of a position
 // @param caller The user closing the position
 // @param instrument The instrument to close the position
-// TODO implement
-// TODO test
 func _close{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
     caller: felt, instrument: felt
 ) {
+    alloc_locals;
+    let (position: Info) = Position.position(owner=caller, instrument=instrument);
+    if (position.size == 0 and position.fees == 0 and position.cost == 0) {
+        return ();
+    }
+    // get trading fees
+    let (local price) = storage_oracles.read(instrument);
+    let (longs) = storage_longs.read(instrument);
+    let (shorts) = storage_shorts.read(instrument);
+    let (liquidity) = storage_liquidity.read(instrument);
+    let (fees) = Fees.compute_fees(
+        price=price,
+        amount=-position.size,
+        long=longs * price,
+        short=shorts * price,
+        liquidity=liquidity,
+    );
+
+    // close position and update collateral
+    let (collateral_change) = Position.close_position(
+        owner=caller, instrument=instrument, price=price, fees=fees
+    );
+    let (collateral) = storage_collateral.read(caller);
+    storage_collateral.write(caller, collateral + collateral_change);
+
+    let (instruments) = storage_user_instruments.read(caller);
+    storage_user_instruments.write(caller, instruments - instrument);
     return ();
 }
 
