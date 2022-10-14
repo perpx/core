@@ -17,6 +17,7 @@ from contracts.perpx_v1_exchange.owners import (
     update_prices,
     update_margin_parameters,
     _trade,
+    _close,
     _remove_collateral,
 )
 from contracts.perpx_v1_exchange.permissionless import add_collateral
@@ -755,6 +756,73 @@ func test_trade_position_opposite_sign_null{
         assert position == [0, 0, 0], f'position error, expected [0, 0, 0], got {position}'
         assert collateral == ids.provide_amount + delta, f'collateral error, expected {ids.provide_amount + delta}, got {collateral}'
         assert new_instruments == instruments - ids.instrument, f'instruments error, expected {instruments - ids.instrument}, got {new_instruments}'
+    %}
+    return ();
+}
+
+@external
+func test_close{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    provide_random: felt
+) {
+    alloc_locals;
+    local address;
+    local provide_amount;
+    local instrument;
+
+    // prank the approval and the add collateral calls
+    %{
+        stop_prank_callable = start_prank(ids.ACCOUNT)
+        ids.provide_amount = ids.provide_random % ids.LIMIT + 1
+        ids.address = context.self_address
+    %}
+    ERC20.approve(spender=address, amount=Uint256(provide_amount, 0));
+    add_collateral(amount=provide_amount);
+
+    // create a fake positions for the user
+    %{
+        from random import randint, sample, seed
+        import importlib  
+        utils = importlib.import_module("protostar-test.perpx-v1-exchange.utils")
+        seed(ids.provide_amount)
+        instrument = randint(0, ids.INSTRUMENT_COUNT - 1)
+        ids.instrument = 2**instrument
+
+        # generate random datas 
+        price = randint(1, ids.LIMIT)
+        cost = randint(-ids.LIMIT, ids.LIMIT)
+        fee = randint(-ids.LIMIT, ids.LIMIT)
+        amount = randint(-ids.LIMIT//price, ids.LIMIT//price)
+        longs = randint(1, ids.LIMIT//price)
+        shorts = randint(1, ids.LIMIT//price)
+        liquidity = randint(1e6, ids.LIMIT)
+        fee_rate = randint(0, ids.VOLATILITY_FEE_RATE_PRECISION)
+
+        store(context.self_address, "storage_positions", [fee, cost, amount], key=[ids.ACCOUNT, 2**instrument])
+        store(context.self_address, "storage_oracles", [price], key=[2**instrument])
+        store(context.self_address, "storage_longs", [longs], key=[2**instrument])
+        store(context.self_address, "storage_shorts", [shorts], key=[2**instrument])
+        store(context.self_address, "storage_liquidity", [liquidity], key=[2**instrument])
+        store(context.self_address, "storage_volatility_fee_rate", [fee_rate])
+        store(context.self_address, "storage_user_instruments", [2**instrument], key=[ids.ACCOUNT])
+
+        collateral = load(ids.address, "storage_collateral", "felt", key=[ids.ACCOUNT])[0]
+    %}
+
+    // close
+    _close(caller=ACCOUNT, instrument=instrument);
+    %{
+        stop_prank_callable() 
+        fees_change = utils.calculate_imbalance_fees(price, -amount, longs, shorts, liquidity)
+        fees_change += abs(fees_change) * fee_rate // ids.VOLATILITY_FEE_RATE_PRECISION 
+        new_cost = cost +  -amount * price
+        delta = -new_cost - fees_change - fee
+
+        collateral = utils.signed_int(load(ids.address, "storage_collateral", "felt", key=[ids.ACCOUNT])[0])
+        position = load(ids.address, "storage_positions", "Info", key=[ids.ACCOUNT, 2**instrument])
+        new_instruments = load(ids.address, "storage_user_instruments", "felt", key=[ids.ACCOUNT])[0]
+        assert position == [0, 0, 0], f'position error, expected [0, 0, 0], got {position}'
+        assert collateral == ids.provide_amount + delta, f'collateral error, expected {ids.provide_amount + delta}, got {collateral}'
+        assert new_instruments == 0, f'instruments error, expected 0, got {new_instruments}'
     %}
     return ();
 }
