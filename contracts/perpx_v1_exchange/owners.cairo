@@ -53,8 +53,7 @@ namespace IERC20 {
 // OWNER
 //
 
-// TODO pausing feature
-// TODO add queues flushing feature
+// TODO check on the price update timing. If no update for 5 minutes: settle all the current positions at the current price and block the contract
 
 // @notice Update the prices of the instruments
 // @param prices_len The number of instruments to update
@@ -94,6 +93,27 @@ func update_margin_parameters{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, ra
     _update_margin_parameters(
         parameters_len=parameters_len, parameters=parameters, mult=1, instruments=instruments
     );
+    return ();
+}
+
+// @notice Flush the operation queue
+@external
+func flush_queue{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    assert_only_owner();
+    let (count) = storage_operations_count.read();
+    _flush_queue_loop(count=count, index=0);
+    storage_operations_count.write(0);
+    return ();
+}
+
+func _flush_queue_loop{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    count: felt, index: felt
+) {
+    if (index == count) {
+        return ();
+    }
+    storage_operations_queue.write(index, QueuedOperation(0, 0, 0, 0, 0));
+    _flush_queue_loop(count=count, index=index + 1);
     return ();
 }
 
@@ -226,7 +246,6 @@ func _update_prev_prices{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_c
 }
 
 // @notice Executes all pending operations in the queue
-// TODO test
 func _execute_queued_operations{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
     let (count) = storage_operations_count.read();
     let (ts) = get_block_timestamp();
