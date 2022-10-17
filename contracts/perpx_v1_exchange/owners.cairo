@@ -2,7 +2,7 @@
 
 from starkware.cairo.common.cairo_builtins import HashBuiltin
 from starkware.starknet.common.syscalls import get_caller_address, get_contract_address
-from starkware.cairo.common.math import unsigned_div_rem, sign
+from starkware.cairo.common.math import unsigned_div_rem, sign, abs_value
 from starkware.cairo.common.math_cmp import is_le, is_nn
 from starkware.starknet.common.syscalls import get_block_timestamp
 from starkware.cairo.common.uint256 import Uint256
@@ -29,7 +29,8 @@ from contracts.perpx_v1_exchange.internals import (
     _verify_length,
     _verify_instruments,
 )
-from contracts.perpx_v1_exchange.structures import Parameter, QueuedOperation
+from contracts.perpx_v1_exchange.structures import Parameter, QueuedOperation, Operation
+from contracts.perpx_v1_instrument import update_long_short
 from contracts.library.position import Position, Info
 from contracts.library.fees import Fees
 from contracts.library.vault import storage_liquidity
@@ -71,6 +72,7 @@ func update_prices{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_p
     _update_prices(
         prices_len=prices_len, prices=prices, mult=1, instrument=0, instruments=instruments
     );
+    _execute_queued_operations();
     let (count) = storage_instrument_count.read();
     _update_volatility(instrument_count=count, mult=1);
     return ();
@@ -224,9 +226,10 @@ func _update_prev_prices{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_c
 }
 
 // @notice Executes all pending operations in the queue
+// TODO test
 func _execute_queued_operations{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
     let (count) = storage_operations_count.read();
-    let ts = get_block_timestamp();
+    let (ts) = get_block_timestamp();
     _execute_queued_operations_loop(timestamp=ts, count=count, index=0);
     storage_operations_count.write(0);
     return ();
@@ -236,7 +239,6 @@ func _execute_queued_operations{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, 
 // @param timestamp The current timestamp
 // @param count The total amount of collateral removals
 // @param index The current index of collateral removal
-// TODO test
 func _execute_queued_operations_loop{
     syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr
 }(timestamp: felt, count: felt, index: felt) {
@@ -262,7 +264,7 @@ func _execute_queued_operations_loop{
         return ();
     }
     if (op == Operation.close) {
-        _close(caller=caller, amount=operation.amount);
+        _close(caller=caller, instrument=operation.instrument);
         storage_operations_queue.write(index, QueuedOperation(0, 0, 0, 0, 0));
         _execute_queued_operations_loop(timestamp=timestamp, count=count, index=index + 1);
         return ();
@@ -310,7 +312,12 @@ func _trade{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
         price=price, amount=amount, long=longs * price, short=shorts * price, liquidity=liquidity
     );
 
-    // if no prior positions, check margin requirement and update position
+    // if no prior positions, check margin requirement, update position, longs, shorts and user instruments
+    tempvar sign_amount = sign(amount);
+    tempvar sign_size = sign(position.size);
+    tempvar abs_size = abs_value(position.size);
+    tempvar abs_amount = abs_value(amount);
+
     if (position.size == 0) {
         let valid_margin = is_le(min_margin + min_margin_change, margin);
         if (valid_margin == 0) {
@@ -319,19 +326,28 @@ func _trade{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
         Position.update_position(
             owner=caller, instrument=instrument, price=price, amount=amount, fees=fees
         );
+        storage_user_instruments.write(caller, instruments + instrument);
+        update_long_short(amount=abs_amount, instrument=instrument, is_long=sign_amount);
         return ();
     }
 
-    // if prior position, check trade direction, margin requirement and update position
-    let sign_size = sign(position.size);
-    let sign_amount = sign(amount);
+    // if prior position, check trade direction, margin requirement and update longs and shorts
     if (sign_size == sign_amount) {
         let valid_margin = is_le(min_margin + min_margin_change, margin);
         if (valid_margin == 0) {
             return ();
         }
+        update_long_short(amount=abs_amount, instrument=instrument, is_long=sign_amount);
         tempvar range_check_ptr = range_check_ptr;
     } else {
+        tempvar is_size_smaller = is_le(abs_size, abs_amount);
+        if (is_size_smaller == 1) {
+            update_long_short(amount=-abs_size, instrument=instrument, is_long=sign_size);
+            tempvar increase = abs_amount - abs_size;
+            update_long_short(amount=increase, instrument=instrument, is_long=sign_amount);
+        } else {
+            update_long_short(amount=-abs_amount, instrument=instrument, is_long=sign_size);
+        }
         tempvar range_check_ptr = range_check_ptr;
     }
 
@@ -376,7 +392,7 @@ func _close{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
         liquidity=liquidity,
     );
 
-    // close position and update collateral
+    // close position, update collateral and longs, shorts
     let (collateral_change) = Position.close_position(
         owner=caller, instrument=instrument, price=price, fees=fees
     );
@@ -385,6 +401,11 @@ func _close{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
 
     let (instruments) = storage_user_instruments.read(caller);
     storage_user_instruments.write(caller, instruments - instrument);
+
+    let sign_size = sign(position.size);
+    update_long_short(
+        amount=(-sign_size) * position.size, instrument=instrument, is_long=sign_size
+    );
     return ();
 }
 
