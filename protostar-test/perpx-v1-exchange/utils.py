@@ -66,5 +66,32 @@ def calculate_exit_fees(prices, amounts, longs, shorts, liquidity, fee_rate, fee
 def calculate_imbalance_fees(price, amount, longs, shorts, liquidity):
     return price*amount*(2*longs*price + price*amount - 2*shorts*price)//(2*liquidity)
 
+def calculate_fees(price, amount, longs, shorts, liquidity, fee_rate, fee_precision):
+    fees_change = calculate_imbalance_fees(price, amount, longs, shorts, liquidity)
+    return fees_change + abs(fees_change) * fee_rate // fee_precision
+    
+def calculate_longs_shorts_change(amount, size):
+    sign_size = math.copysign(1, size)
+    sign_amount = math.copysign(1, amount)
+    if sign_size == sign_amount:
+        if amount > 0:
+            return amount, 0
+        else:
+            return 0, abs(amount)
+    else:
+        if amount > 0:
+            if amount < abs(size):
+                return 0, -amount
+            else:
+                return amount + size, size
+        else:
+            if abs(amount) < size:
+                return amount, 0
+            else:
+                return -size, size + amount
+
+def calculate_collateral_change(price, size, cost, fees):
+    return -(price*(-size) + cost) - fees
+
 def signed_int(value):
     return value if value <= PRIME/2 else -(PRIME - value)

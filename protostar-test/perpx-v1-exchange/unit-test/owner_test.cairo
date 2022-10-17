@@ -933,3 +933,175 @@ func test_remove_collateral{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, rang
     %}
     return ();
 }
+
+@external
+func test_execute_queued_operation{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    ) {
+    alloc_locals;
+    local address;
+    local provide_amount;
+    // prank the approval and the add collateral calls
+    %{
+        from random import randint, sample, seed
+        import importlib  
+        import numpy as np
+        utils = importlib.import_module("protostar-test.perpx-v1-exchange.utils")
+        stop_prank_callable = start_prank(ids.ACCOUNT) 
+        ids.address = context.self_address
+        ids.provide_amount = randint(1, ids.LIMIT)
+    %}
+    ERC20.approve(spender=address, amount=Uint256(provide_amount, 0));
+    add_collateral(amount=provide_amount);
+
+    // create fake queue for the user
+    %{
+        user_positions = {}
+        seed(1)
+        warp(1)
+        operations_length = 20
+        length = ids.INSTRUMENT_COUNT
+        sample_instruments = [2**bit for bit in sample(range(0, ids.INSTRUMENT_COUNT), length)] 
+        instruments = sum(sample_instruments) 
+
+        # generate random datas which will make the test pass (costs = 0, negative fees)
+        prices = [randint(1, ids.LIMIT//operations_length) for i in range(length)]
+        fees = [randint(-ids.LIMIT//operations_length, 0) for i in range(length)]
+        amounts = [randint(-ids.LIMIT//prices[i], ids.LIMIT//prices[i]) for i in range(length)]
+        volatility = [randint(1, ids.MATH64X61_FRACT_PART//(5*10**4)) for i in range(length)]
+        k = [randint(1, 100*ids.MATH64X61_FRACT_PART) for i in range(length)]
+        longs = [ids.LIMIT//100 for i in range(length)]
+        shorts = [ids.LIMIT//100 for i in range(length)]
+        liquidity = [randint(1e6, ids.LIMIT) for i in range(length)]
+        fee_rate = randint(0, ids.VOLATILITY_FEE_RATE_PRECISION)
+        collateral = ids.provide_amount
+
+        # calculate the owners margin
+        f = sum(fees)
+        exit_fees = utils.calculate_exit_fees(prices, amounts, longs, shorts, liquidity, fee_rate, ids.VOLATILITY_FEE_RATE_PRECISION)
+        pnl = sum([p*a for (p,a) in zip(prices, amounts)])
+        margin = collateral + pnl - f - exit_fees
+
+        # calculate the minimum margin for the instruments owner
+        v_scaled = np.array(volatility)/2**61
+        k_scaled = np.array(k, dtype=float)/2**61
+        prices_scaled = np.array(prices)/ids.LIQUIDITY_PRECISION
+        amounts_scaled = np.array(amounts)/ids.LIQUIDITY_PRECISION
+        size = np.multiply(prices_scaled, np.absolute(amounts_scaled))
+        min_margin = utils.calculate_margin_requirement(v_scaled, k_scaled, size) * ids.LIQUIDITY_PRECISION
+
+        for (i, instr) in enumerate(sample_instruments):
+            user_positions[instr] = [fees[i], 0, amounts[i]]
+            store(context.self_address, "storage_oracles", [prices[i]], key=[instr])
+            store(context.self_address, "storage_positions", [fees[i], 0, amounts[i]], key=[ids.ACCOUNT, instr])
+            store(context.self_address, "storage_volatility", [volatility[i]], key=[instr])
+            store(context.self_address, "storage_margin_parameters", [k[i], 0], key=[instr])
+            store(context.self_address, "storage_longs", [longs[i]], key=[instr])
+            store(context.self_address, "storage_shorts", [shorts[i]], key=[instr])
+            store(context.self_address, "storage_liquidity", [liquidity[i]], key=[instr])
+
+        store(context.self_address, "storage_volatility_fee_rate", [fee_rate])
+        store(context.self_address, "storage_user_instruments", [instruments], key=[ids.ACCOUNT])
+        store(context.self_address, "storage_operations_count", [operations_length], key=[])
+
+        operations = []
+        for i in range(operations_length):
+            order_type = randint(0, 2)
+            if order_type == 0:
+                operation = [ids.ACCOUNT, randint(-operations_length, operations_length), 2**randint(0, ids.INSTRUMENT_COUNT - 1), 2, 0]
+                operations.append(operation)
+                store(context.self_address, "storage_operations_queue", operation, key=[i])
+            if order_type == 1:
+                operation = [ids.ACCOUNT, 0, 2**randint(0, ids.INSTRUMENT_COUNT - 1), 2, 1]
+                operations.append(operation)
+                store(context.self_address, "storage_operations_queue", operation, key=[i])
+            if order_type == 2:
+                operation = [ids.ACCOUNT, randint(1, ids.provide_amount), 0, 2, 2]
+                operations.append(operation)
+                store(context.self_address, "storage_operations_queue", operation, key=[i])
+    %}
+    _execute_queued_operations();
+    %{
+        #apply all the operations and check the end result: all positions as well as longs and shorts
+        import math
+        for op in operations:
+            user_position = user_positions.get(op[2], [0, 0, 0])
+            fees = user_position[0]
+            cost = user_position[1]
+            size = user_position[2]
+            amount = op[1]
+            if op[4] == 0:
+                index = sample_instruments.index(op[2])
+                inst = op[2]
+                # calculate margin and fees change
+                fees_change = utils.calculate_fees(prices[index], amount, longs[index], shorts[index], liquidity[index], fee_rate, ids.VOLATILITY_FEE_RATE_PRECISION)
+                min_margin_change = utils.calculate_margin_requirement(v_scaled[index], k_scaled[index], amount) * ids.LIQUIDITY_PRECISION
+                # if empty position and margin requirement met -> update position, instruments and longs/shorts
+                if user_position == [0, 0, 0]:
+                    if min_margin_change + min_margin < margin:
+                        user_positions[op[2]] = [fees_change, prices[index]* amount, amount]
+                        instruments += op[2]
+                        if amount > 0:
+                            longs[index] += amount
+                        else:
+                            shorts[index] += abs(amount)
+                else:
+                    sign_size = math.copysign(1, size)
+                    sign_amount = math.copysign(1, amount)
+                    if sign_size == sign_amount and min_margin_change + min_margin > margin:
+                        continue
+                    # calculate the change in longs and shorts
+                    longs_change, shorts_change = utils.calculate_longs_shorts_change(amount, size)
+                    longs[index] += longs_change
+                    shorts[index] += shorts_change
+                    # check if trade closes the position
+                    if size == -amount:
+                        instruments -= inst
+                        collateral += utils.calculate_collateral_change(prices[index], size, cost, fees_change + fees)
+                        user_positions[op[2]] = [0, 0, 0]
+                    else:
+                        user_positions[op[2]] = [fees + fees_change, cost + prices[index]* amount, size + amount]
+                    min_margin += min_margin_change
+            # close a position
+            if op[4] == 1:
+                index = sample_instruments.index(op[2])
+                # check a position exists
+                if user_position == [0, 0, 0]:
+                    continue
+                # calculate margin and fees change
+                fees_change = utils.calculate_fees(prices[index], -size, longs[index], shorts[index], liquidity[index], fee_rate, ids.VOLATILITY_FEE_RATE_PRECISION)
+                min_margin_change = utils.calculate_margin_requirement(v_scaled[index], k_scaled[index], size) * ids.LIQUIDITY_PRECISION
+                # update longs or shorts
+                if size < 0:
+                    shorts[index] -= abs(size)
+                else:
+                    longs[index] -= size
+                # calculate the collateral change, margin requirement change and instruments change
+                collateral += utils.calculate_collateral_change(prices[index], size, cost, fees_change + fees)
+                user_positions[op[2]] = [0, 0, 0]
+                instruments -= op[2]
+                min_margin -= min_margin_change
+            if op[4] == 2:
+                # check margin requirement is met
+                temp_margin = margin - op[1]
+                if min_margin < temp_margin:
+                    collateral -= op[1]
+                    margin -= op[1]
+
+        # check that positions, longs, shorts, collateral and instruments have been correctly updated
+        for (i, instr) in enumerate(sample_instruments):
+            pos = load(context.self_address, "storage_positions", "Info", key=[ids.ACCOUNT, instr])
+            l = load(context.self_address, "storage_longs", "felt", key=[instr])[0]
+            s = load(context.self_address, "storage_shorts", "felt", key=[instr])[0]
+            index = sample_instruments.index(instr)
+            pos = [utils.signed_int(p) for p in pos]
+            
+            assert l == longs[index], f'longs error, expected {longs[index]}, got {l}'
+            assert s == shorts[index], f'shorts error, expected {shorts[index]}, got {s}'
+            assert pos == user_positions[instr], f'position error, expected {user_positions[instr]}, got {pos}'
+        coll = utils.signed_int(load(context.self_address, "storage_collateral", "felt", key=[ids.ACCOUNT])[0])
+        instrs = utils.signed_int(load(context.self_address, "storage_user_instruments", "felt", key=[ids.ACCOUNT])[0])
+        assert coll == collateral, f'collateral error, expected {collateral}, got {coll}'
+        assert instrs == instruments, f'instruments error, expected {instruments}, got {instrs}'
+    %}
+    return ();
+}
