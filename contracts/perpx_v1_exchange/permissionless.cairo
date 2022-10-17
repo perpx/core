@@ -27,6 +27,7 @@ from contracts.perpx_v1_exchange.internals import (
 from contracts.constants.perpx_constants import (
     LIMIT,
     MAX_BOUND,
+    MIN_LIQUIDITY,
     MAX_LIQUIDATOR_PAY_OUT,
     MIN_LIQUIDATOR_PAY_OUT,
 )
@@ -62,8 +63,10 @@ func trade{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
 ) -> () {
     alloc_locals;
     local limit = LIMIT;
+    local min_liquidity = MIN_LIQUIDITY;
     let (count) = storage_operations_count.read();
     let (queue_limit) = storage_queue_limit.read();
+    let (liquidity) = storage_liquidity.read(instrument);
     // check the limits
     _verify_instrument(instrument=instrument);
     let (local caller) = get_caller_address();
@@ -71,6 +74,10 @@ func trade{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
     with_attr error_message("caller is the zero address") {
         assert_not_zero(caller);
     }
+    with_attr error_message("minimal liquidity not reached {min_liquidity}") {
+        assert [range_check_ptr] = liquidity - MIN_LIQUIDITY;
+    }
+    let range_check_ptr = range_check_ptr + 1;
     with_attr error_message("trading amount limited to {limit}") {
         assert [range_check_ptr] = amount - 1;
         assert [range_check_ptr + 1] = LIMIT - amount;
@@ -106,14 +113,20 @@ func close{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
 ) {
     alloc_locals;
     local limit = LIMIT;
+    local min_liquidity = MIN_LIQUIDITY;
     let (count) = storage_operations_count.read();
     let (queue_limit) = storage_queue_limit.read();
+    let (liquidity) = storage_liquidity.read(instrument);
     // check the limits
     _verify_instrument(instrument=instrument);
     let (local caller) = get_caller_address();
     with_attr error_message("caller is the zero address") {
         assert_not_zero(caller);
     }
+    with_attr error_message("minimal liquidity not reached {min_liquidity}") {
+        assert [range_check_ptr] = liquidity - MIN_LIQUIDITY;
+    }
+    let range_check_ptr = range_check_ptr + 1;
     with_attr error_message("invalid expiration timestamp") {
         assert [range_check_ptr] = valid_until - 1;
         assert [range_check_ptr + 1] = LIMIT - valid_until;
