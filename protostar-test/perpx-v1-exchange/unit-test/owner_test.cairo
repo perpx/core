@@ -12,14 +12,15 @@ from contracts.constants.perpx_constants import (
     VOLATILITY_FEE_RATE_PRECISION,
 )
 from contracts.perpx_v1_exchange.owners import (
-    update_prev_prices,
-    _update_volatility,
     update_prices,
     update_margin_parameters,
+    flush_queue,
+    _update_volatility,
+    update_prev_prices,
+    _execute_queued_operations,
     _trade,
     _close,
     _remove_collateral,
-    _execute_queued_operations,
 )
 from contracts.perpx_v1_exchange.permissionless import add_collateral
 from contracts.perpx_v1_exchange.structures import Parameter
@@ -83,6 +84,38 @@ func __setup__{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
         store(ids.address, "ERC20_balances", [ids.RANGE_CHECK_BOUND - 1, 0], key=[ids.ACCOUNT])
         store(ids.address, "storage_token", [ids.address])
         max_examples(200)
+    %}
+    return ();
+}
+
+// TEST FLUSH QUEUE
+
+@external
+func test_flush_queue{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    %{
+        from random import randint
+        start_prank(ids.OWNER)
+        operations_length = 100
+        for i in range(operations_length):
+            order_type = randint(0, 2)
+            if order_type == 0:
+                operation = [ids.ACCOUNT, randint(-operations_length, operations_length), 2**randint(0, ids.INSTRUMENT_COUNT - 1), 2, 0]
+                store(context.self_address, "storage_operations_queue", operation, key=[i])
+            if order_type == 1:
+                operation = [ids.ACCOUNT, 0, 2**randint(0, ids.INSTRUMENT_COUNT - 1), 2, 1]
+                store(context.self_address, "storage_operations_queue", operation, key=[i])
+            if order_type == 2:
+                operation = [ids.ACCOUNT, randint(1, ids.LIMIT), 0, 2, 2]
+                store(context.self_address, "storage_operations_queue", operation, key=[i])
+        store(context.self_address, "storage_operations_count", [operations_length])
+    %}
+    flush_queue();
+    %{
+        for i in range(operations_length):
+            operation = load(context.self_address, "storage_operations_queue", "QueuedOperation", key=[i])
+            assert operation == [0, 0, 0, 0, 0], f'operation error, expected [0, 0, 0, 0, 0], got {operation}'
+        count = load(context.self_address, "storage_operations_count", "felt")[0]
+        assert count == 0, f'count error, expected 0, got {count}'
     %}
     return ();
 }
@@ -193,6 +226,8 @@ func test_updates{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_pt
     %}
     return ();
 }
+
+// TEST TRADE
 
 @external
 func test_trade_no_position_valid_margin{
@@ -781,6 +816,8 @@ func test_trade_position_opposite_sign_null{
     return ();
 }
 
+// TEST CLOSE
+
 @external
 func test_close{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
     provide_random: felt
@@ -854,6 +891,8 @@ func test_close{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}
     %}
     return ();
 }
+
+// TEST REMOVE COLLATERAL
 
 @external
 func test_remove_collateral{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
@@ -934,6 +973,8 @@ func test_remove_collateral{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, rang
     return ();
 }
 
+// TEST EXECUTE QUEUED OPERATION
+
 @external
 func test_execute_queued_operation{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
     ) {
@@ -1001,7 +1042,7 @@ func test_execute_queued_operation{syscall_ptr: felt*, pedersen_ptr: HashBuiltin
 
         store(context.self_address, "storage_volatility_fee_rate", [fee_rate])
         store(context.self_address, "storage_user_instruments", [instruments], key=[ids.ACCOUNT])
-        store(context.self_address, "storage_operations_count", [operations_length], key=[])
+        store(context.self_address, "storage_operations_count", [operations_length])
 
         operations = []
         for i in range(operations_length):
