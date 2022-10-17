@@ -19,6 +19,7 @@ from contracts.constants.perpx_constants import (
     RANGE_CHECK_BOUND,
     LIMIT,
     LIQUIDITY_PRECISION,
+    MIN_LIQUIDITY,
     VOLATILITY_FEE_RATE_PRECISION,
     MAX_LIQUIDATOR_PAY_OUT,
     MIN_LIQUIDATOR_PAY_OUT,
@@ -77,6 +78,8 @@ func __setup__{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
         store(ids.address, "storage_token", [ids.address])
         store(ids.address, "storage_instrument_count", [ids.INSTRUMENT_COUNT])
         store(ids.address, "storage_queue_limit", [100])
+        for i in range(ids.INSTRUMENT_COUNT):
+            store(ids.address, "storage_liquidity", [ids.MIN_LIQUIDITY * 10], key=[2**i])
         context.self_address = ids.address 
         max_examples(200)
     %}

@@ -13,7 +13,11 @@ from contracts.perpx_v1_exchange.permissionless import (
     add_collateral,
     remove_collateral,
 )
-from contracts.constants.perpx_constants import LIQUIDITY_PRECISION, VOLATILITY_FEE_RATE_PRECISION
+from contracts.constants.perpx_constants import (
+    LIQUIDITY_PRECISION,
+    VOLATILITY_FEE_RATE_PRECISION,
+    MIN_LIQUIDITY,
+)
 from src.openzeppelin.token.erc20.library import ERC20
 from contracts.constants.perpx_constants import RANGE_CHECK_BOUND, LIMIT
 
@@ -292,6 +296,21 @@ func test_trade_limit_8{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_ch
 }
 
 @external
+func test_trade_limit_9{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    // test case: insufficient liquidity
+    alloc_locals;
+    local instrument;
+    %{
+        ids.instrument = 1
+        start_prank(ids.ACCOUNT) 
+        store(context.self_address, "storage_liquidity", [ids.MIN_LIQUIDITY - 1], key=[ids.instrument])
+        expect_revert(error_message=f'minimal liquidity not reached {ids.MIN_LIQUIDITY}')
+    %}
+    trade(amount=1, instrument=instrument, valid_until=1);
+    return ();
+}
+
+@external
 func test_close_limit_1{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
     // test case: caller = 0
     %{
@@ -345,6 +364,21 @@ func test_close_limit_5{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_ch
         ids.instrument = 2**(ids.INSTRUMENT_COUNT) + 1 
         start_prank(ids.ACCOUNT) 
         expect_revert(error_message="instrument limited to 2**(instrument_count - 1)")
+    %}
+    close(instrument=instrument, valid_until=1);
+    return ();
+}
+
+@external
+func test_close_limit_6{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    // test case: insufficient liquidity
+    alloc_locals;
+    local instrument;
+    %{
+        ids.instrument = 1
+        start_prank(ids.ACCOUNT) 
+        store(context.self_address, "storage_liquidity", [ids.MIN_LIQUIDITY - 1], key=[ids.instrument])
+        expect_revert(error_message=f'minimal liquidity not reached {ids.MIN_LIQUIDITY}')
     %}
     close(instrument=instrument, valid_until=1);
     return ();
