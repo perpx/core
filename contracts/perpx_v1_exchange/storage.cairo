@@ -51,5 +51,13 @@ func storage_instrument_count() -> (instrument_count: felt) {
 }
 
 @storage_var
-func is_paused() -> (paused: felt) {
+func storage_last_price_update() -> (ts: felt) {
+}
+
+@storage_var
+func storage_last_price_delta() -> (delta: felt) {
+}
+
+@storage_var
+func storage_is_escaping() -> (escaping: felt) {
 }

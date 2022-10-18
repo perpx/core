@@ -1,10 +1,13 @@
 %lang starknet
 
 from starkware.cairo.common.cairo_builtins import HashBuiltin
-from starkware.starknet.common.syscalls import get_caller_address, get_contract_address
+from starkware.starknet.common.syscalls import (
+    get_caller_address,
+    get_contract_address,
+    get_block_timestamp,
+)
 from starkware.cairo.common.math import unsigned_div_rem, sign, abs_value
 from starkware.cairo.common.math_cmp import is_le, is_nn
-from starkware.starknet.common.syscalls import get_block_timestamp
 from starkware.cairo.common.uint256 import Uint256
 
 from contracts.perpx_v1_instrument import storage_longs, storage_shorts
@@ -19,6 +22,9 @@ from contracts.perpx_v1_exchange.storage import (
     storage_volatility,
     storage_operations_queue,
     storage_operations_count,
+    storage_last_price_update,
+    storage_last_price_delta,
+    storage_is_escaping,
 )
 from contracts.perpx_v1_exchange.internals import (
     _calculate_pnl,
@@ -53,9 +59,7 @@ namespace IERC20 {
 // OWNER
 //
 
-// TODO check on the price update timing. If no update for 5 minutes: settle all the current positions at the current price and block the contract
-
-// @notice Update the prices of the instruments
+// @notice Update the prices of the instruments and executes order in the queue
 // @param prices_len The number of instruments to update
 // @param prices The prices of the instruments to update
 // @param instruments The instruments to update
@@ -65,7 +69,20 @@ namespace IERC20 {
 func update_prices{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
     prices_len: felt, prices: felt*, instruments: felt
 ) -> () {
+    alloc_locals;
     assert_only_owner();
+    let (is_escaping) = storage_is_escaping.read();
+    if (is_escaping == 1) {
+        return ();
+    }
+    let (local ts) = get_block_timestamp();
+    let (ts_last_price_update) = storage_last_price_update.read();
+    let (delta) = storage_last_price_delta.read();
+    tempvar is_outdated = is_le(ts_last_price_update + delta * 60, ts);
+    if (is_outdated == 1) {
+        storage_is_escaping.write(1);
+        return ();
+    }
     _verify_instruments(instruments);
     _verify_length(length=prices_len, instruments=instruments);
     _update_prices(
@@ -74,6 +91,7 @@ func update_prices{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_p
     _execute_queued_operations();
     let (count) = storage_instrument_count.read();
     _update_volatility(instrument_count=count, mult=1);
+    storage_last_price_update.write(ts);
     return ();
 }
 
