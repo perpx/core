@@ -13,6 +13,7 @@ from contracts.perpx_v1_exchange.permissionless import (
     add_collateral,
     remove_collateral,
     liquidate,
+    escape_close,
 )
 from src.openzeppelin.token.erc20.library import ERC20
 from contracts.constants.perpx_constants import (
@@ -199,6 +200,70 @@ func loop_close{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}
         ts_len=ts_len - 1,
         ts=ts + 1,
     );
+    return ();
+}
+
+// TEST ESCAPE CLOSE
+
+@external
+func test_escape_close{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    alloc_locals;
+    local instrument;
+
+    // create a fake positions for the user
+    %{
+        start_prank(ids.ACCOUNT)
+        from random import randint, sample, seed
+        import importlib  
+        utils = importlib.import_module("protostar-test.perpx-v1-exchange.utils")
+        seed(0)
+        instrument = randint(0, ids.INSTRUMENT_COUNT - 1)
+        ids.instrument = 2**instrument
+
+        # generate random datas 
+        price = randint(1, ids.LIMIT)
+        cost = randint(-ids.LIMIT, ids.LIMIT)
+        fee = randint(-ids.LIMIT, ids.LIMIT)
+        collateral = randint(1, ids.LIMIT)
+        amount = randint(-ids.LIMIT//price, ids.LIMIT//price)
+        longs = randint(abs(amount), ids.LIMIT//price + 1)
+        shorts = randint(abs(amount), ids.LIMIT//price + 1)
+        liquidity = randint(1e6, ids.LIMIT)
+        fee_rate = randint(0, ids.VOLATILITY_FEE_RATE_PRECISION)
+
+        store(context.self_address, "storage_positions", [fee, cost, amount], key=[ids.ACCOUNT, 2**instrument])
+        store(context.self_address, "storage_oracles", [price], key=[2**instrument])
+        store(context.self_address, "storage_longs", [longs], key=[2**instrument])
+        store(context.self_address, "storage_shorts", [shorts], key=[2**instrument])
+        store(context.self_address, "storage_liquidity", [liquidity], key=[2**instrument])
+        store(context.self_address, "storage_collateral", [collateral], key=[ids.ACCOUNT])
+        store(context.self_address, "storage_volatility_fee_rate", [fee_rate])
+        store(context.self_address, "storage_user_instruments", [2**instrument], key=[ids.ACCOUNT])
+
+        store(context.self_address, "storage_is_escaping", [1])
+    %}
+
+    // escape close
+    escape_close(instrument=instrument);
+    %{
+        fees_change = utils.calculate_fees(price, -amount, longs, shorts, liquidity, fee_rate, ids.VOLATILITY_FEE_RATE_PRECISION)
+        new_cost = cost +  -amount * price
+        delta = -new_cost - fees_change - fee
+
+        c = utils.signed_int(load(context.self_address, "storage_collateral", "felt", key=[ids.ACCOUNT])[0])
+        position = load(context.self_address, "storage_positions", "Info", key=[ids.ACCOUNT, 2**instrument])
+        new_instruments = load(context.self_address, "storage_user_instruments", "felt", key=[ids.ACCOUNT])[0]
+        assert position == [0, 0, 0], f'position error, expected [0, 0, 0], got {position}'
+        assert c == collateral + delta, f'collateral error, expected {collateral + delta}, got {collateral}'
+        assert new_instruments == 0, f'instruments error, expected 0, got {new_instruments}'
+
+        if amount > 0:
+            new_longs = load(context.self_address, "storage_longs", "felt", key=[2**instrument])[0]
+            assert new_longs == longs - amount, f'longs error, expected {longs - amount}, got {new_longs}'
+        else:
+            new_shorts = load(context.self_address, "storage_shorts", "felt", key=[2**instrument])[0]
+            assert new_shorts == shorts - abs(amount), f'shorts error, expected {shorts - abs(amount)}, got {new_shorts}'
+    %}
     return ();
 }
 
