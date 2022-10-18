@@ -25,7 +25,7 @@ from contracts.perpx_v1_exchange.internals import (
     _divide_margin,
     _verify_instrument,
 )
-from contracts.perpx_v1_exchange.owners import _close
+from contracts.perpx_v1_exchange.owners import _close, _remove_collateral
 from contracts.constants.perpx_constants import (
     LIMIT,
     MAX_BOUND,
@@ -311,7 +311,7 @@ func add_collateral{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_
     return ();
 }
 
-// @notice Add the collateral removal to the operations queue
+// @notice Add the collateral removal to the operations queue or execute if no position
 // @param amount The change in collateral
 // @param valid_until The validity timestamp of the collateral removal
 @external
@@ -327,16 +327,25 @@ func remove_collateral{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_che
     with_attr error_message("caller is the zero address") {
         assert_not_zero(caller);
     }
+
     with_attr error_message("collateral decrease limited to {limit}") {
         assert [range_check_ptr] = amount - 1;
         assert [range_check_ptr + 1] = LIMIT - amount;
     }
     let range_check_ptr = range_check_ptr + 2;
+
+    let (instruments) = storage_user_instruments.read(caller);
+    if (instruments == 0) {
+        _remove_collateral(caller=caller, amount=amount);
+        return ();
+    }
+
     with_attr error_message("invalid expiration timestamp") {
         assert [range_check_ptr] = valid_until - 1;
         assert [range_check_ptr + 1] = LIMIT - valid_until;
     }
     let range_check_ptr = range_check_ptr + 2;
+
     with_attr error_message("queue size limit reached") {
         assert_le(count + 1, queue_limit);
     }
