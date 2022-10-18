@@ -67,7 +67,7 @@ namespace IERC20 {
 // @dev apply to [A, E, G], instruments = 2^0 + 2^4 + 2^6
 @external
 func update_prices{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
-    prices_len: felt, prices: felt*, instruments: felt
+    prices_len: felt, prices: felt*, instruments: felt, ts: felt
 ) -> () {
     alloc_locals;
     assert_only_owner();
@@ -75,7 +75,6 @@ func update_prices{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_p
     if (is_escaping == 1) {
         return ();
     }
-    let (local ts) = get_block_timestamp();
     let (ts_last_price_update) = storage_last_price_update.read();
     let (delta) = storage_last_price_delta.read();
     tempvar is_outdated = is_le(ts_last_price_update + delta * 60, ts);
