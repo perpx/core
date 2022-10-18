@@ -113,7 +113,7 @@ func test_update_prev_prices_limit{syscall_ptr: felt*, pedersen_ptr: HashBuiltin
 // TEST UPDATE PRICES
 
 @external
-func test_update_prices_limit{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+func test_update_prices_limit_1{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
     // test case: wrong owner
     alloc_locals;
     let (local arr) = alloc();
@@ -122,6 +122,53 @@ func test_update_prices_limit{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, ra
         expect_revert(error_message="Ownable: caller is not the owner")
     %}
     update_prices(prices_len=0, prices=arr, instruments=0);
+    return ();
+}
+
+@external
+func test_update_prices_limit_2{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    // test case: is_escaping and outdated
+    alloc_locals;
+    let (local arr) = alloc();
+    local instruments;
+    %{
+        start_prank(ids.OWNER)
+        store(context.self_address, "storage_is_escaping", [1])
+        store(context.self_address, "storage_is_escaping", [1])
+        store(context.self_address, "storage_instrument_count", [ids.INSTRUMENT_COUNT])
+        instruments = [2**i for i in [0, 1, 2, 3]]
+        ids.instruments = sum(instruments)
+        last_prices = [x+1 for x in range(ids.INSTRUMENT_COUNT)]
+        for i in range(4):
+            memory[ids.arr + i] = i + 1
+        for (i, p) in enumerate(last_prices):
+            store(context.self_address, "storage_oracles", [p], key=[2**i])
+    %}
+    // no update -> is_escaping
+    update_prices(prices_len=4, prices=arr, instruments=instruments);
+    %{
+        for (i, bit) in enumerate(instruments):
+            price = load(context.self_address, "storage_oracles", "felt", key=[bit])[0]
+            assert price == last_prices[i], f'instrument price error expected {last_prices[i]}, got {price}'
+    %}
+
+    %{ store(context.self_address, "storage_is_escaping", [0]) %}
+    // no update -> is_outdated
+    update_prices(prices_len=4, prices=arr, instruments=instruments);
+    %{
+        for (i, bit) in enumerate(instruments):
+            price = load(context.self_address, "storage_oracles", "felt", key=[bit])[0]
+            assert price == last_prices[i], f'instrument price error expected {last_prices[i]}, got {price}'
+    %}
+
+    %{ store(context.self_address, "storage_last_price_update", [10]) %}
+    // update
+    update_prices(prices_len=4, prices=arr, instruments=instruments);
+    %{
+        for (i, bit) in enumerate(instruments):
+            price = load(context.self_address, "storage_oracles", "felt", key=[bit])[0]
+            assert price == memory[ids.arr + i], f'instrument price error expected {memory[ids.arr + i]}, got {price}'
+    %}
     return ();
 }
 

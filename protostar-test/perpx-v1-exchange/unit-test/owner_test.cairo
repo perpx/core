@@ -203,6 +203,7 @@ func test_updates{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_pt
             memory[ids.arr_parameters._reference_value + 2*i + 1] = randint(0, ids.MATH_PRECISION)
         for (bit, price) in enumerate(last_prices):
             store(context.self_address, "storage_oracles", [price], key=[2**bit])
+        store(context.self_address, "storage_last_price_update", [10])
     %}
     // prank and call functions
     %{ stop_prank_callable = start_prank(ids.OWNER) %}
