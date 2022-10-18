@@ -641,6 +641,7 @@ func test_remove_collateral{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, rang
     let (local timestamps: felt*) = alloc();
     local length;
     %{
+        store(context.self_address, "storage_user_instruments", [10], key=[ids.ACCOUNT])
         from random import randint, seed
         seed(ids.random)
         ids.length = ids.random % 10 + 1
@@ -672,6 +673,36 @@ func loop_remove{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr
     }
     remove_collateral(amount=[amounts], valid_until=[ts]);
     loop_remove(amounts_len=amounts_len - 1, amounts=amounts + 1, ts_len=ts_len - 1, ts=ts + 1);
+    return ();
+}
+
+@external
+func test_remove_collateral_no_position{
+    syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr
+}(provide_random: felt, remove_random: felt) {
+    alloc_locals;
+    local address;
+    local provide_amount;
+    local remove_amount;
+    %{ ids.address = context.self_address %}
+
+    // prank the approval and the add collateral calls
+    %{
+        stop_prank_callable = start_prank(ids.ACCOUNT)
+        ids.provide_amount = ids.provide_random % ids.LIMIT + 1
+        ids.remove_amount = ids.remove_random % ids.provide_amount + 1
+    %}
+    ERC20.approve(spender=address, amount=Uint256(provide_amount, 0));
+    add_collateral(amount=provide_amount);
+
+    // remove the collateral
+    remove_collateral(amount=remove_amount, valid_until=0);
+    %{
+        stop_prank_callable() 
+        user_collateral = load(ids.address, "storage_collateral", "felt", key=[ids.ACCOUNT])[0]
+        new_collateral = ids.provide_amount - ids.remove_amount
+        assert user_collateral == new_collateral, f'collateral error, expected {new_collateral}, got {user_collateral}'
+    %}
     return ();
 }
 

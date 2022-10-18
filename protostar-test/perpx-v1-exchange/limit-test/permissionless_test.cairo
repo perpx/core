@@ -430,6 +430,7 @@ func test_remove_collateral_limit_4{
     // test case: valid_until = 0
     %{
         start_prank(ids.ACCOUNT) 
+        store(context.self_address, "storage_user_instruments", [10], key=[ids.ACCOUNT])
         expect_revert(error_message=f'invalid expiration timestamp')
     %}
     remove_collateral(amount=1, valid_until=0);
@@ -443,6 +444,7 @@ func test_remove_collateral_limit_5{
     // test case: valid_until = LIMIT + 1
     %{
         start_prank(ids.ACCOUNT) 
+        store(context.self_address, "storage_user_instruments", [10], key=[ids.ACCOUNT])
         expect_revert(error_message=f'invalid expiration timestamp')
     %}
     remove_collateral(amount=1, valid_until=LIMIT + 1);
@@ -457,6 +459,7 @@ func test_remove_collateral_limit_6{
     %{
         start_prank(ids.ACCOUNT) 
         store(context.self_address, "storage_operations_count", [100])
+        store(context.self_address, "storage_user_instruments", [10], key=[ids.ACCOUNT])
         expect_revert(error_message=f'queue size limit reached')
     %}
     remove_collateral(amount=1, valid_until=1);
