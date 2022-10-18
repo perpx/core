@@ -121,7 +121,7 @@ func test_update_prices_limit_1{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, 
         start_prank(1)
         expect_revert(error_message="Ownable: caller is not the owner")
     %}
-    update_prices(prices_len=0, prices=arr, instruments=0);
+    update_prices(prices_len=0, prices=arr, instruments=0, ts=0);
     return ();
 }
 
@@ -145,7 +145,7 @@ func test_update_prices_limit_2{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, 
             store(context.self_address, "storage_oracles", [p], key=[2**i])
     %}
     // no update -> is_escaping
-    update_prices(prices_len=4, prices=arr, instruments=instruments);
+    update_prices(prices_len=4, prices=arr, instruments=instruments, ts=0);
     %{
         for (i, bit) in enumerate(instruments):
             price = load(context.self_address, "storage_oracles", "felt", key=[bit])[0]
@@ -154,7 +154,7 @@ func test_update_prices_limit_2{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, 
 
     %{ store(context.self_address, "storage_is_escaping", [0]) %}
     // no update -> is_outdated
-    update_prices(prices_len=4, prices=arr, instruments=instruments);
+    update_prices(prices_len=4, prices=arr, instruments=instruments, ts=0);
     %{
         for (i, bit) in enumerate(instruments):
             price = load(context.self_address, "storage_oracles", "felt", key=[bit])[0]
@@ -163,7 +163,7 @@ func test_update_prices_limit_2{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, 
 
     %{ store(context.self_address, "storage_last_price_update", [10]) %}
     // update
-    update_prices(prices_len=4, prices=arr, instruments=instruments);
+    update_prices(prices_len=4, prices=arr, instruments=instruments, ts=0);
     %{
         for (i, bit) in enumerate(instruments):
             price = load(context.self_address, "storage_oracles", "felt", key=[bit])[0]

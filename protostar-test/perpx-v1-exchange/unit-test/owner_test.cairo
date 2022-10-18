@@ -207,7 +207,7 @@ func test_updates{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_pt
     %}
     // prank and call functions
     %{ stop_prank_callable = start_prank(ids.OWNER) %}
-    update_prices(prices_len=length, prices=arr_prices, instruments=instruments);
+    update_prices(prices_len=length, prices=arr_prices, instruments=instruments, ts=0);
     update_margin_parameters(
         parameters_len=length, parameters=arr_parameters, instruments=instruments
     );
