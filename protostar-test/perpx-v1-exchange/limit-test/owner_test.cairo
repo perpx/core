@@ -17,7 +17,6 @@ from contracts.perpx_v1_exchange.owners import (
     update_margin_parameters,
     flush_queue,
     update_prev_prices,
-    _update_volatility,
     _remove_collateral,
 )
 from contracts.perpx_v1_exchange.permissionless import add_collateral
@@ -161,7 +160,7 @@ func test_update_prices_limit_2{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, 
             assert price == last_prices[i], f'instrument price error expected {last_prices[i]}, got {price}'
     %}
 
-    %{ store(context.self_address, "storage_last_price_update", [10]) %}
+    %{ store(context.self_address, "storage_last_price_update_ts", [10]) %}
     // update
     update_prices(prices_len=4, prices=arr, instruments=instruments, ts=0);
     %{

@@ -151,6 +151,7 @@ func test_update_volatility{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, rang
     random: felt
 ) {
     alloc_locals;
+    local ts;
     %{
         from random import seed,randint, random
         import importlib  
@@ -158,19 +159,23 @@ func test_update_volatility{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, rang
         seed(ids.random)
         prev_prices = [randint(1, ids.LIMIT) for x in range(ids.INSTRUMENT_COUNT)]
         prices = [randint(1, ids.LIMIT) for x in range(ids.INSTRUMENT_COUNT)]
-        lambdas = [randint(0, ids.MATH_PRECISION) for x in range(ids.INSTRUMENT_COUNT)]
+        taus = [randint(ids.MATH64X61_FRACT_PART, ids.MATH_PRECISION) for x in range(ids.INSTRUMENT_COUNT)]
         prev_vols = [randint(0, ids.LIMIT) for x in range(ids.INSTRUMENT_COUNT)]
+        ids.ts = randint(1666190548, 2549796148)
+        prev_ts = ids.ts - randint(1, 10);
         for i in range(ids.INSTRUMENT_COUNT):
             store(context.self_address, "storage_prev_oracles", [prev_prices[i]], key=[2**i])
             store(context.self_address, "storage_oracles", [prices[i]], key=[2**i])
             store(context.self_address, "storage_volatility", [prev_vols[i]], key=[2**i])
-            store(context.self_address, "storage_margin_parameters", [0, lambdas[i]], key=[2**i])
+            store(context.self_address, "storage_margin_parameters", [0, taus[i]], key=[2**i])
+        store(context.self_address, "storage_last_price_update_ts", [prev_ts])
     %}
-    _update_volatility(instrument_count=INSTRUMENT_COUNT, mult=1);
+    _update_volatility(instrument_count=INSTRUMENT_COUNT, mult=1, ts=ts);
     %{
         import math
         returns = [math.pow(math.log10(x/y), 2) * 2**61 for (x, y) in zip(prices, prev_prices)]
-        vol = [utils.mul(x, y) + ret for (x,y,ret) in zip(lambdas, prev_vols, returns)]
+        ws = [(1 - math.exp(-(ids.ts - prev_ts) * 2**61 / tau)) * 2**61 for tau in taus]
+        vol = [utils.mul((2**61 - w), v) + utils.mul(w, ret) for (w,v,ret) in zip(ws, prev_vols, returns)]
         for i in range(ids.INSTRUMENT_COUNT):
             volatility = load(context.self_address, "storage_volatility", "felt", key=[2**i])[0]
             diff = abs(vol[i] - volatility) / 2**61
@@ -203,7 +208,7 @@ func test_updates{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_pt
             memory[ids.arr_parameters._reference_value + 2*i + 1] = randint(0, ids.MATH_PRECISION)
         for (bit, price) in enumerate(last_prices):
             store(context.self_address, "storage_oracles", [price], key=[2**bit])
-        store(context.self_address, "storage_last_price_update", [10])
+        store(context.self_address, "storage_last_price_update_ts", [10])
     %}
     // prank and call functions
     %{ stop_prank_callable = start_prank(ids.OWNER) %}
