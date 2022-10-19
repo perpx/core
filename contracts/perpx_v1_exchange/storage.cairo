@@ -51,7 +51,7 @@ func storage_instrument_count() -> (instrument_count: felt) {
 }
 
 @storage_var
-func storage_last_price_update() -> (ts: felt) {
+func storage_last_price_update_ts() -> (ts: felt) {
 }
 
 @storage_var

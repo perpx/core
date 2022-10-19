@@ -22,7 +22,7 @@ from contracts.perpx_v1_exchange.storage import (
     storage_volatility,
     storage_operations_queue,
     storage_operations_count,
-    storage_last_price_update,
+    storage_last_price_update_ts,
     storage_last_price_delta,
     storage_is_escaping,
 )
@@ -75,7 +75,7 @@ func update_prices{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_p
     if (is_escaping == 1) {
         return ();
     }
-    let (ts_last_price_update) = storage_last_price_update.read();
+    let (ts_last_price_update) = storage_last_price_update_ts.read();
     let (delta) = storage_last_price_delta.read();
     tempvar is_outdated = is_le(ts_last_price_update + delta * 60, ts);
     if (is_outdated == 1) {
@@ -89,8 +89,8 @@ func update_prices{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_p
     );
     _execute_queued_operations();
     let (count) = storage_instrument_count.read();
-    _update_volatility(instrument_count=count, mult=1);
-    storage_last_price_update.write(ts);
+    _update_volatility(instrument_count=count, mult=1, ts=ts);
+    storage_last_price_update_ts.write(ts);
     return ();
 }
 
@@ -205,7 +205,7 @@ func _update_margin_parameters{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, r
 }
 
 func _update_volatility{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
-    instrument_count: felt, mult: felt
+    instrument_count: felt, mult: felt, ts: felt
 ) -> () {
     alloc_locals;
     if (instrument_count == 0) {
@@ -213,8 +213,8 @@ func _update_volatility{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_ch
     }
     let (price) = storage_oracles.read(mult);
     let (prev_price) = storage_prev_oracles.read(mult);
-    let price64x61 = Math64x61.fromFelt(price);
-    let prev_price64x61 = Math64x61.fromFelt(prev_price);
+    tempvar price64x61 = Math64x61.fromFelt(price);
+    tempvar prev_price64x61 = Math64x61.fromFelt(prev_price);
 
     // truncate by price precision (6)
     let (price64x61, _) = unsigned_div_rem(price64x61, LIQUIDITY_PRECISION);
@@ -228,10 +228,19 @@ func _update_volatility{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_ch
     let (old_volatility) = storage_volatility.read(mult);
     let (params) = storage_margin_parameters.read(mult);
 
-    let new_volatility = Math64x61.mul(params.lambda, old_volatility);
-    let new_volatility = Math64x61.add(new_volatility, square_log_price_return);
+    let (ts_prev) = storage_last_price_update_ts.read();
+    tempvar ts_prev64x61 = Math64x61.fromFelt(ts_prev);
+    tempvar ts_current64x61 = Math64x61.fromFelt(ts);
+    let negative_delta_t = Math64x61.sub(ts_prev64x61, ts_current64x61);
+    let quotient_t_tau = Math64x61.div(negative_delta_t, params.tau);
+    let one_minus_w = Math64x61.exp(quotient_t_tau);
+    let w = Math64x61.sub(Math64x61.ONE, one_minus_w);
+
+    let smoothing = Math64x61.mul(one_minus_w, old_volatility);
+    let current = Math64x61.mul(w, square_log_price_return);
+    let new_volatility = Math64x61.add(smoothing, current);
     storage_volatility.write(mult, new_volatility);
-    _update_volatility(instrument_count=instrument_count - 1, mult=mult * 2);
+    _update_volatility(instrument_count=instrument_count - 1, mult=mult * 2, ts=ts);
     return ();
 }
 
