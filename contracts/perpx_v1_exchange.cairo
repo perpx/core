@@ -21,6 +21,7 @@ from contracts.perpx_v1_exchange.mutables import (
 from contracts.perpx_v1_exchange.owners import (
     update_prices,
     update_margin_parameters,
+    flush_queue,
     update_prev_prices,
     _update_prev_prices,
 )

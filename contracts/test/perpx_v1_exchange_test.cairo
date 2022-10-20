@@ -45,9 +45,9 @@ func update_prev_prices_test{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, ran
 
 @external
 func update_volatility_test{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
-    instrument_count: felt
+    instrument_count: felt, ts: felt
 ) -> () {
-    _update_volatility(instrument_count=instrument_count, mult=1);
+    _update_volatility(instrument_count=instrument_count, mult=1, ts=ts);
     return ();
 }
 

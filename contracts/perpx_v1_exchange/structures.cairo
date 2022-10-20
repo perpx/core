@@ -20,8 +20,8 @@ struct Operation {
     remove_collateral: felt,
 }
 
-// k and lambda are stored as fixed point values 64x61
+// k and tau are stored as fixed point values 64x61
 struct Parameter {
     k: felt,
-    lambda: felt,
+    tau: felt,
 }

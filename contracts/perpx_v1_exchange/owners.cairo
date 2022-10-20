@@ -1,10 +1,13 @@
 %lang starknet
 
 from starkware.cairo.common.cairo_builtins import HashBuiltin
-from starkware.starknet.common.syscalls import get_caller_address, get_contract_address
-from starkware.cairo.common.math import unsigned_div_rem, sign
+from starkware.starknet.common.syscalls import (
+    get_caller_address,
+    get_contract_address,
+    get_block_timestamp,
+)
+from starkware.cairo.common.math import unsigned_div_rem, sign, abs_value
 from starkware.cairo.common.math_cmp import is_le, is_nn
-from starkware.starknet.common.syscalls import get_block_timestamp
 from starkware.cairo.common.uint256 import Uint256
 
 from contracts.perpx_v1_instrument import storage_longs, storage_shorts
@@ -19,6 +22,9 @@ from contracts.perpx_v1_exchange.storage import (
     storage_volatility,
     storage_operations_queue,
     storage_operations_count,
+    storage_last_price_update_ts,
+    storage_last_price_delta,
+    storage_is_escaping,
 )
 from contracts.perpx_v1_exchange.internals import (
     _calculate_pnl,
@@ -29,7 +35,8 @@ from contracts.perpx_v1_exchange.internals import (
     _verify_length,
     _verify_instruments,
 )
-from contracts.perpx_v1_exchange.structures import Parameter, QueuedOperation
+from contracts.perpx_v1_exchange.structures import Parameter, QueuedOperation, Operation
+from contracts.perpx_v1_instrument import update_long_short
 from contracts.library.position import Position, Info
 from contracts.library.fees import Fees
 from contracts.library.vault import storage_liquidity
@@ -52,10 +59,7 @@ namespace IERC20 {
 // OWNER
 //
 
-// TODO pausing feature
-// TODO add queues flushing feature
-
-// @notice Update the prices of the instruments
+// @notice Update the prices of the instruments and executes order in the queue
 // @param prices_len The number of instruments to update
 // @param prices The prices of the instruments to update
 // @param instruments The instruments to update
@@ -63,16 +67,30 @@ namespace IERC20 {
 // @dev apply to [A, E, G], instruments = 2^0 + 2^4 + 2^6
 @external
 func update_prices{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
-    prices_len: felt, prices: felt*, instruments: felt
+    prices_len: felt, prices: felt*, instruments: felt, ts: felt
 ) -> () {
+    alloc_locals;
     assert_only_owner();
+    let (is_escaping) = storage_is_escaping.read();
+    if (is_escaping == 1) {
+        return ();
+    }
+    let (ts_last_price_update) = storage_last_price_update_ts.read();
+    let (delta) = storage_last_price_delta.read();
+    tempvar is_outdated = is_le(ts_last_price_update + delta * 60, ts);
+    if (is_outdated == 1) {
+        storage_is_escaping.write(1);
+        return ();
+    }
     _verify_instruments(instruments);
     _verify_length(length=prices_len, instruments=instruments);
     _update_prices(
         prices_len=prices_len, prices=prices, mult=1, instrument=0, instruments=instruments
     );
+    _execute_queued_operations();
     let (count) = storage_instrument_count.read();
-    _update_volatility(instrument_count=count, mult=1);
+    _update_volatility(instrument_count=count, mult=1, ts=ts);
+    storage_last_price_update_ts.write(ts);
     return ();
 }
 
@@ -92,6 +110,27 @@ func update_margin_parameters{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, ra
     _update_margin_parameters(
         parameters_len=parameters_len, parameters=parameters, mult=1, instruments=instruments
     );
+    return ();
+}
+
+// @notice Flush the operation queue
+@external
+func flush_queue{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    assert_only_owner();
+    let (count) = storage_operations_count.read();
+    _flush_queue_loop(count=count, index=0);
+    storage_operations_count.write(0);
+    return ();
+}
+
+func _flush_queue_loop{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    count: felt, index: felt
+) {
+    if (index == count) {
+        return ();
+    }
+    storage_operations_queue.write(index, QueuedOperation(0, 0, 0, 0, 0));
+    _flush_queue_loop(count=count, index=index + 1);
     return ();
 }
 
@@ -166,7 +205,7 @@ func _update_margin_parameters{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, r
 }
 
 func _update_volatility{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
-    instrument_count: felt, mult: felt
+    instrument_count: felt, mult: felt, ts: felt
 ) -> () {
     alloc_locals;
     if (instrument_count == 0) {
@@ -174,8 +213,8 @@ func _update_volatility{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_ch
     }
     let (price) = storage_oracles.read(mult);
     let (prev_price) = storage_prev_oracles.read(mult);
-    let price64x61 = Math64x61.fromFelt(price);
-    let prev_price64x61 = Math64x61.fromFelt(prev_price);
+    tempvar price64x61 = Math64x61.fromFelt(price);
+    tempvar prev_price64x61 = Math64x61.fromFelt(prev_price);
 
     // truncate by price precision (6)
     let (price64x61, _) = unsigned_div_rem(price64x61, LIQUIDITY_PRECISION);
@@ -189,10 +228,19 @@ func _update_volatility{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_ch
     let (old_volatility) = storage_volatility.read(mult);
     let (params) = storage_margin_parameters.read(mult);
 
-    let new_volatility = Math64x61.mul(params.lambda, old_volatility);
-    let new_volatility = Math64x61.add(new_volatility, square_log_price_return);
+    let (ts_prev) = storage_last_price_update_ts.read();
+    tempvar ts_prev64x61 = Math64x61.fromFelt(ts_prev);
+    tempvar ts_current64x61 = Math64x61.fromFelt(ts);
+    let negative_delta_t = Math64x61.sub(ts_prev64x61, ts_current64x61);
+    let quotient_t_tau = Math64x61.div(negative_delta_t, params.tau);
+    let one_minus_w = Math64x61.exp(quotient_t_tau);
+    let w = Math64x61.sub(Math64x61.ONE, one_minus_w);
+
+    let smoothing = Math64x61.mul(one_minus_w, old_volatility);
+    let current = Math64x61.mul(w, square_log_price_return);
+    let new_volatility = Math64x61.add(smoothing, current);
     storage_volatility.write(mult, new_volatility);
-    _update_volatility(instrument_count=instrument_count - 1, mult=mult * 2);
+    _update_volatility(instrument_count=instrument_count - 1, mult=mult * 2, ts=ts);
     return ();
 }
 
@@ -226,7 +274,7 @@ func _update_prev_prices{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_c
 // @notice Executes all pending operations in the queue
 func _execute_queued_operations{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
     let (count) = storage_operations_count.read();
-    let ts = get_block_timestamp();
+    let (ts) = get_block_timestamp();
     _execute_queued_operations_loop(timestamp=ts, count=count, index=0);
     storage_operations_count.write(0);
     return ();
@@ -236,7 +284,6 @@ func _execute_queued_operations{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, 
 // @param timestamp The current timestamp
 // @param count The total amount of collateral removals
 // @param index The current index of collateral removal
-// TODO test
 func _execute_queued_operations_loop{
     syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr
 }(timestamp: felt, count: felt, index: felt) {
@@ -262,7 +309,7 @@ func _execute_queued_operations_loop{
         return ();
     }
     if (op == Operation.close) {
-        _close(caller=caller, amount=operation.amount);
+        _close(caller=caller, instrument=operation.instrument);
         storage_operations_queue.write(index, QueuedOperation(0, 0, 0, 0, 0));
         _execute_queued_operations_loop(timestamp=timestamp, count=count, index=index + 1);
         return ();
@@ -310,7 +357,12 @@ func _trade{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
         price=price, amount=amount, long=longs * price, short=shorts * price, liquidity=liquidity
     );
 
-    // if no prior positions, check margin requirement and update position
+    // if no prior positions, check margin requirement, update position, longs, shorts and user instruments
+    tempvar sign_amount = sign(amount);
+    tempvar sign_size = sign(position.size);
+    tempvar abs_size = abs_value(position.size);
+    tempvar abs_amount = abs_value(amount);
+
     if (position.size == 0) {
         let valid_margin = is_le(min_margin + min_margin_change, margin);
         if (valid_margin == 0) {
@@ -319,19 +371,28 @@ func _trade{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
         Position.update_position(
             owner=caller, instrument=instrument, price=price, amount=amount, fees=fees
         );
+        storage_user_instruments.write(caller, instruments + instrument);
+        update_long_short(amount=abs_amount, instrument=instrument, is_long=sign_amount);
         return ();
     }
 
-    // if prior position, check trade direction, margin requirement and update position
-    let sign_size = sign(position.size);
-    let sign_amount = sign(amount);
+    // if prior position, check trade direction, margin requirement and update longs and shorts
     if (sign_size == sign_amount) {
         let valid_margin = is_le(min_margin + min_margin_change, margin);
         if (valid_margin == 0) {
             return ();
         }
+        update_long_short(amount=abs_amount, instrument=instrument, is_long=sign_amount);
         tempvar range_check_ptr = range_check_ptr;
     } else {
+        tempvar is_size_smaller = is_le(abs_size, abs_amount);
+        if (is_size_smaller == 1) {
+            update_long_short(amount=-abs_size, instrument=instrument, is_long=sign_size);
+            tempvar increase = abs_amount - abs_size;
+            update_long_short(amount=increase, instrument=instrument, is_long=sign_amount);
+        } else {
+            update_long_short(amount=-abs_amount, instrument=instrument, is_long=sign_size);
+        }
         tempvar range_check_ptr = range_check_ptr;
     }
 
@@ -376,7 +437,7 @@ func _close{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
         liquidity=liquidity,
     );
 
-    // close position and update collateral
+    // close position, update collateral and longs, shorts
     let (collateral_change) = Position.close_position(
         owner=caller, instrument=instrument, price=price, fees=fees
     );
@@ -385,6 +446,11 @@ func _close{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
 
     let (instruments) = storage_user_instruments.read(caller);
     storage_user_instruments.write(caller, instruments - instrument);
+
+    let sign_size = sign(position.size);
+    update_long_short(
+        amount=(-sign_size) * position.size, instrument=instrument, is_long=sign_size
+    );
     return ();
 }
 

@@ -14,6 +14,7 @@ from contracts.perpx_v1_exchange.storage import (
     storage_operations_queue,
     storage_operations_count,
     storage_queue_limit,
+    storage_is_escaping,
 )
 from contracts.perpx_v1_exchange.internals import (
     _calculate_pnl,
@@ -24,9 +25,11 @@ from contracts.perpx_v1_exchange.internals import (
     _divide_margin,
     _verify_instrument,
 )
+from contracts.perpx_v1_exchange.owners import _close, _remove_collateral
 from contracts.constants.perpx_constants import (
     LIMIT,
     MAX_BOUND,
+    MIN_LIQUIDITY,
     MAX_LIQUIDATOR_PAY_OUT,
     MIN_LIQUIDATOR_PAY_OUT,
 )
@@ -62,24 +65,43 @@ func trade{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
 ) -> () {
     alloc_locals;
     local limit = LIMIT;
-    let (count) = storage_operations_count.read();
-    let (queue_limit) = storage_queue_limit.read();
+    local min_liquidity = MIN_LIQUIDITY;
+
     // check the limits
     _verify_instrument(instrument=instrument);
+
     let (local caller) = get_caller_address();
+    let (position: Info) = Position.position(caller, instrument);
     with_attr error_message("caller is the zero address") {
         assert_not_zero(caller);
     }
+
+    let (liquidity) = storage_liquidity.read(instrument);
+    with_attr error_message("minimal liquidity not reached {min_liquidity}") {
+        assert [range_check_ptr] = liquidity - MIN_LIQUIDITY;
+    }
+    let range_check_ptr = range_check_ptr + 1;
+
     with_attr error_message("trading amount limited to {limit}") {
         assert [range_check_ptr] = amount - 1;
         assert [range_check_ptr + 1] = LIMIT - amount;
     }
     let range_check_ptr = range_check_ptr + 2;
+
+    with_attr error_message("total position size limited to {limit}") {
+        assert [range_check_ptr] = position.size + amount - 1;
+        assert [range_check_ptr + 1] = LIMIT - amount - position.size;
+    }
+    let range_check_ptr = range_check_ptr + 2;
+
     with_attr error_message("invalid expiration timestamp") {
         assert [range_check_ptr] = valid_until - 1;
         assert [range_check_ptr + 1] = LIMIT - valid_until;
     }
     let range_check_ptr = range_check_ptr + 2;
+
+    let (count) = storage_operations_count.read();
+    let (queue_limit) = storage_queue_limit.read();
     with_attr error_message("queue size limit reached") {
         assert_le(count + 1, queue_limit);
     }
@@ -95,24 +117,36 @@ func trade{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
 // @notice Add the closing of the position of the owner to the queue
 // @param instrument The instrument for which to close the position
 // @param valid_until The validity timestamp of the closing order
+@external
 func close{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
     instrument: felt, valid_until: felt
 ) {
     alloc_locals;
     local limit = LIMIT;
-    let (count) = storage_operations_count.read();
-    let (queue_limit) = storage_queue_limit.read();
+    local min_liquidity = MIN_LIQUIDITY;
+
     // check the limits
     _verify_instrument(instrument=instrument);
+
     let (local caller) = get_caller_address();
     with_attr error_message("caller is the zero address") {
         assert_not_zero(caller);
     }
+
+    let (liquidity) = storage_liquidity.read(instrument);
+    with_attr error_message("minimal liquidity not reached {min_liquidity}") {
+        assert [range_check_ptr] = liquidity - MIN_LIQUIDITY;
+    }
+    let range_check_ptr = range_check_ptr + 1;
+
     with_attr error_message("invalid expiration timestamp") {
         assert [range_check_ptr] = valid_until - 1;
         assert [range_check_ptr + 1] = LIMIT - valid_until;
     }
     let range_check_ptr = range_check_ptr + 2;
+
+    let (count) = storage_operations_count.read();
+    let (queue_limit) = storage_queue_limit.read();
     with_attr error_message("queue size limit reached") {
         assert_le(count + 1, queue_limit);
     }
@@ -122,6 +156,36 @@ func close{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
         QueuedOperation(caller=caller, amount=0, instrument=instrument, valid_until=valid_until, operation=Operation.close),
     );
     storage_operations_count.write(count + 1);
+    return ();
+}
+
+// @notice Close the position on the target instrument
+// @dev Can only be called when contract is in escaping mode
+// @param instrument The instrument for which to close the position
+@external
+func escape_close{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    instrument: felt
+) {
+    alloc_locals;
+    let (is_escaping) = storage_is_escaping.read();
+    with_attr error_message("contract not in escape mode") {
+        assert is_escaping = 1;
+    }
+
+    _verify_instrument(instrument=instrument);
+
+    let (local caller) = get_caller_address();
+    with_attr error_message("caller is the zero address") {
+        assert_not_zero(caller);
+    }
+
+    let (liquidity) = storage_liquidity.read(instrument);
+    with_attr error_message("minimal liquidity not reached {min_liquidity}") {
+        assert [range_check_ptr] = liquidity - MIN_LIQUIDITY;
+    }
+
+    let range_check_ptr = range_check_ptr + 1;
+    _close(caller=caller, instrument=instrument);
     return ();
 }
 
@@ -152,6 +216,7 @@ func liquidate{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
     let (instrument_count) = _close_all_positions(
         owner=owner, instruments=instruments, instrument_count=0, mult=1
     );
+    storage_user_instruments.write(owner, 0);
 
     let (caller) = get_caller_address();
     let (token_address) = storage_token.read();
@@ -184,7 +249,7 @@ func liquidate{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
             Liquidate.emit(owner=owner, instruments=instruments);
             return ();
         }
-        // If 0 < margin < MIN_LIQUIDATOR_PAY_OUT, send MLPAY.
+        // If 0 <= margin < MIN_LIQUIDATOR_PAY_OUT, send MLPAY.
         tempvar remainder = MIN_LIQUIDATOR_PAY_OUT - margin;
         let (q, r) = unsigned_div_rem(remainder, instrument_count);
         _divide_margin(total=remainder, amount=-q, instruments=instruments, mult=1);
@@ -246,7 +311,7 @@ func add_collateral{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_
     return ();
 }
 
-// @notice Add the collateral removal to the operations queue
+// @notice Add the collateral removal to the operations queue or execute if no position
 // @param amount The change in collateral
 // @param valid_until The validity timestamp of the collateral removal
 @external
@@ -262,16 +327,25 @@ func remove_collateral{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_che
     with_attr error_message("caller is the zero address") {
         assert_not_zero(caller);
     }
+
     with_attr error_message("collateral decrease limited to {limit}") {
         assert [range_check_ptr] = amount - 1;
         assert [range_check_ptr + 1] = LIMIT - amount;
     }
     let range_check_ptr = range_check_ptr + 2;
+
+    let (instruments) = storage_user_instruments.read(caller);
+    if (instruments == 0) {
+        _remove_collateral(caller=caller, amount=amount);
+        return ();
+    }
+
     with_attr error_message("invalid expiration timestamp") {
         assert [range_check_ptr] = valid_until - 1;
         assert [range_check_ptr + 1] = LIMIT - valid_until;
     }
     let range_check_ptr = range_check_ptr + 2;
+
     with_attr error_message("queue size limit reached") {
         assert_le(count + 1, queue_limit);
     }

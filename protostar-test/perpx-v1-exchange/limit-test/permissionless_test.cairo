@@ -13,7 +13,11 @@ from contracts.perpx_v1_exchange.permissionless import (
     add_collateral,
     remove_collateral,
 )
-from contracts.constants.perpx_constants import LIQUIDITY_PRECISION, VOLATILITY_FEE_RATE_PRECISION
+from contracts.constants.perpx_constants import (
+    LIQUIDITY_PRECISION,
+    VOLATILITY_FEE_RATE_PRECISION,
+    MIN_LIQUIDITY,
+)
 from src.openzeppelin.token.erc20.library import ERC20
 from contracts.constants.perpx_constants import RANGE_CHECK_BOUND, LIMIT
 
@@ -233,6 +237,18 @@ func test_trade_limit_3{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_ch
 
 @external
 func test_trade_limit_4{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    // test case: amount = LIMIT + 1
+    %{
+        start_prank(ids.ACCOUNT) 
+        store(context.self_address, "storage_positions", [0, 0, ids.LIMIT], key=[ids.ACCOUNT, 1])
+        expect_revert(error_message=f'total position size limited to {ids.LIMIT}')
+    %}
+    trade(amount=1, instrument=1, valid_until=1);
+    return ();
+}
+
+@external
+func test_trade_limit_5{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
     // test case: valid_until = 0
     %{
         start_prank(ids.ACCOUNT) 
@@ -243,7 +259,7 @@ func test_trade_limit_4{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_ch
 }
 
 @external
-func test_trade_limit_5{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+func test_trade_limit_6{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
     // test case: valid_until = LIMIT + 1
     %{
         start_prank(ids.ACCOUNT) 
@@ -254,7 +270,7 @@ func test_trade_limit_5{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_ch
 }
 
 @external
-func test_trade_limit_6{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+func test_trade_limit_7{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
     // test case: storage_operations_count = storage_queue_limit
     %{
         start_prank(ids.ACCOUNT) 
@@ -266,7 +282,7 @@ func test_trade_limit_6{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_ch
 }
 
 @external
-func test_trade_limit_7{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+func test_trade_limit_8{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
     // test case: incorrect instrument
     alloc_locals;
     local instrument;
@@ -274,6 +290,21 @@ func test_trade_limit_7{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_ch
         ids.instrument = 2**(ids.INSTRUMENT_COUNT) + 1 
         start_prank(ids.ACCOUNT) 
         expect_revert(error_message="instrument limited to 2**(instrument_count - 1)")
+    %}
+    trade(amount=1, instrument=instrument, valid_until=1);
+    return ();
+}
+
+@external
+func test_trade_limit_9{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    // test case: insufficient liquidity
+    alloc_locals;
+    local instrument;
+    %{
+        ids.instrument = 1
+        start_prank(ids.ACCOUNT) 
+        store(context.self_address, "storage_liquidity", [ids.MIN_LIQUIDITY - 1], key=[ids.instrument])
+        expect_revert(error_message=f'minimal liquidity not reached {ids.MIN_LIQUIDITY}')
     %}
     trade(amount=1, instrument=instrument, valid_until=1);
     return ();
@@ -339,6 +370,21 @@ func test_close_limit_5{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_ch
 }
 
 @external
+func test_close_limit_6{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    // test case: insufficient liquidity
+    alloc_locals;
+    local instrument;
+    %{
+        ids.instrument = 1
+        start_prank(ids.ACCOUNT) 
+        store(context.self_address, "storage_liquidity", [ids.MIN_LIQUIDITY - 1], key=[ids.instrument])
+        expect_revert(error_message=f'minimal liquidity not reached {ids.MIN_LIQUIDITY}')
+    %}
+    close(instrument=instrument, valid_until=1);
+    return ();
+}
+
+@external
 func test_remove_collateral_limit_1{
     syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr
 }() {
@@ -384,6 +430,7 @@ func test_remove_collateral_limit_4{
     // test case: valid_until = 0
     %{
         start_prank(ids.ACCOUNT) 
+        store(context.self_address, "storage_user_instruments", [10], key=[ids.ACCOUNT])
         expect_revert(error_message=f'invalid expiration timestamp')
     %}
     remove_collateral(amount=1, valid_until=0);
@@ -397,6 +444,7 @@ func test_remove_collateral_limit_5{
     // test case: valid_until = LIMIT + 1
     %{
         start_prank(ids.ACCOUNT) 
+        store(context.self_address, "storage_user_instruments", [10], key=[ids.ACCOUNT])
         expect_revert(error_message=f'invalid expiration timestamp')
     %}
     remove_collateral(amount=1, valid_until=LIMIT + 1);
@@ -411,6 +459,7 @@ func test_remove_collateral_limit_6{
     %{
         start_prank(ids.ACCOUNT) 
         store(context.self_address, "storage_operations_count", [100])
+        store(context.self_address, "storage_user_instruments", [10], key=[ids.ACCOUNT])
         expect_revert(error_message=f'queue size limit reached')
     %}
     remove_collateral(amount=1, valid_until=1);
