@@ -1,4 +1,5 @@
 import {
+    Account,
     StarknetContract,
     StarknetContractFactory,
     StringMap,
@@ -11,6 +12,7 @@ import {
 } from './test-cases/vault-test-cases'
 
 let contract: StarknetContract
+let account: Account
 
 // constants
 const INSTRUMENT: bigint = 1n
@@ -27,7 +29,6 @@ async function check(
     instrument: bigint,
     liquidity: bigint,
     shares: bigint,
-    userLiquidity: bigint,
     userShares: bigint
 ) {
     // liquidity
@@ -49,16 +50,13 @@ async function check(
         userShares,
         'failed on user shares'
     )
-    expect(resUserStake.stake.amount).to.equal(
-        userLiquidity,
-        'failed on user liquidity'
-    )
 }
 
 before(async () => {
     const contractFactory: StarknetContractFactory =
         await starknet.getContractFactory('test/vault_test.cairo')
     contract = await contractFactory.deploy()
+    account = await starknet.deployAccount('OpenZeppelin')
 })
 
 describe('#provide_liquidity', () => {
@@ -66,13 +64,15 @@ describe('#provide_liquidity', () => {
         let liquidity: bigint = 0n
         let shares: bigint = 0n
         for (const scenario of VAULT_PROVIDE_LIMIT_CASES) {
+            let amount: bigint = 0n
             for (const cas of scenario) {
-                const args: StringMap = {
+                let args: StringMap = {
                     amount: cas.amount,
                     owner: provideAddress,
                     instrument: INSTRUMENT,
                 }
-                await contract.invoke('provide_liquidity_test', args)
+                console.log(args)
+                await account.invoke(contract, 'provide_liquidity_test', args)
                 // update values
                 if (shares == 0n) {
                     shares = cas.amount * 100n
@@ -86,17 +86,20 @@ describe('#provide_liquidity', () => {
                     INSTRUMENT,
                     liquidity,
                     shares,
-                    liquidity,
                     shares
                 )
+                amount += cas.amount
             }
+            // clean the shares
+            let args: StringMap = {
+                amount: amount,
+                owner: provideAddress,
+                instrument: INSTRUMENT,
+            }
+            liquidity = 0n
+            shares = 0n
+            await account.invoke(contract, 'withdraw_liquidity_test', args)
         }
-        const args: StringMap = {
-            amount: liquidity,
-            owner: provideAddress,
-            instrument: INSTRUMENT,
-        }
-        await contract.invoke('withdraw_liquidity_test', args)
     })
 })
 
@@ -110,12 +113,20 @@ describe('#withdraw_liquidity', () => {
                     instrument: INSTRUMENT,
                 }
                 if (cas.amount > 0n) {
-                    await contract.invoke('provide_liquidity_test', args)
+                    await account.invoke(
+                        contract,
+                        'provide_liquidity_test',
+                        args
+                    )
                 } else {
-                    await contract.invoke('withdraw_liquidity_test', args)
+                    await account.invoke(
+                        contract,
+                        'withdraw_liquidity_test',
+                        args
+                    )
                 }
             }
-            await check(withdrawAddress, INSTRUMENT, 0n, 0n, 0n, 0n)
+            await check(withdrawAddress, INSTRUMENT, 0n, 0n, 0n)
         }
     })
 })

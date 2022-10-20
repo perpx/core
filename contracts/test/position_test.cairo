@@ -2,8 +2,7 @@
 
 from starkware.cairo.common.cairo_builtins import HashBuiltin
 
-from contracts.library.Position import update_position, close_position, position
-from contracts.library.Position import Info
+from contracts.library.position import Position, Info
 
 @storage_var
 func delta() -> (delta: felt) {

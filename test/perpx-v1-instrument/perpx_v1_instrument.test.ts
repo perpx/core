@@ -1,5 +1,6 @@
 import {
     StarknetContract,
+    Account,
     StarknetContractFactory,
     StringMap,
 } from 'hardhat/types/runtime'
@@ -13,6 +14,7 @@ import {
 } from './test-cases/perpx-v1-instrument-test-cases'
 
 let contract: StarknetContract
+let account: Account
 
 // constants
 const INSTRUMENT: bigint = 1n
@@ -21,6 +23,7 @@ before(async () => {
     const contractFactory: StarknetContractFactory =
         await starknet.getContractFactory('test/perpx_v1_instrument_test.cairo')
     contract = await contractFactory.deploy()
+    account = await starknet.deployAccount('OpenZeppelin')
 })
 
 describe('#update_long_short', () => {
@@ -33,7 +36,7 @@ describe('#update_long_short', () => {
                     instrument: INSTRUMENT,
                     is_long: 1,
                 }
-                await contract.invoke('update_long_short_test', args)
+                await account.invoke(contract, 'update_long_short_test', args)
                 longs += cas.amount
                 const args_view: StringMap = {
                     instrument: INSTRUMENT,
@@ -52,7 +55,7 @@ describe('#update_long_short', () => {
                 is_long: 1,
             }
             try {
-                await contract.invoke('update_long_short_test', args)
+                await account.invoke(contract, 'update_long_short_test', args)
                 expect.fail('should have failed with negative longs')
             } catch (error: any) {
                 expect(error.message).to.contain('negative longs')
@@ -71,7 +74,7 @@ describe('#update_long_short', () => {
                     instrument: INSTRUMENT,
                     is_long: 0,
                 }
-                await contract.invoke('update_long_short_test', args)
+                await account.invoke(contract, 'update_long_short_test', args)
                 shorts += cas.amount
                 const args_view: StringMap = {
                     instrument: INSTRUMENT,
@@ -90,7 +93,7 @@ describe('#update_long_short', () => {
                 is_long: 0,
             }
             try {
-                await contract.invoke('update_long_short_test', args)
+                await account.invoke(contract, 'update_long_short_test', args)
                 expect.fail('should have failed with negative shorts')
             } catch (error: any) {
                 expect(error.message).to.contain('negative shorts')
