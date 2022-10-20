@@ -29,9 +29,9 @@ func view_price_test{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check
 
 @external
 func update_prices_test{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
-    prices_len: felt, prices: felt*, instruments: felt
+    prices_len: felt, prices: felt*, instruments: felt, ts: felt
 ) -> () {
-    update_prices(prices_len=prices_len, prices=prices, instruments=instruments);
+    update_prices(prices_len=prices_len, prices=prices, instruments=instruments, ts=ts);
     return ();
 }
 
