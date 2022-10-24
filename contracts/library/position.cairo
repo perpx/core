@@ -3,6 +3,8 @@
 from starkware.cairo.common.cairo_builtins import HashBuiltin
 from starkware.cairo.common.math import signed_div_rem, abs_value
 
+from contracts.library.mathx6 import Mathx6
+
 // @title Position
 // @notice Position represents an owner's position in an instrument
 
@@ -55,7 +57,7 @@ namespace Position {
         let size = info.size + amount;
         let new_fees = fees + info.fees;
 
-        tempvar cost_inc = price * amount;
+        tempvar cost_inc = Mathx6.mul(price, amount);
         let cost = info.cost + cost_inc;
 
         storage_positions.write(owner, instrument, Info(new_fees, cost, size));
@@ -73,7 +75,7 @@ namespace Position {
     ) -> (delta: felt) {
         let (info) = storage_positions.read(owner, instrument);
 
-        tempvar cost_inc = price * (-info.size);
+        tempvar cost_inc = Mathx6.mul(price, -info.size);
         let cost = info.cost + cost_inc;
 
         tempvar delta = (-cost) - fees - info.fees;
