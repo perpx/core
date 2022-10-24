@@ -17,6 +17,7 @@ from contracts.perpx_v1_exchange.owners import (
     update_margin_parameters,
     flush_queue,
     update_prev_prices,
+    _trade,
     _remove_collateral,
 )
 from contracts.perpx_v1_exchange.permissionless import add_collateral
@@ -184,5 +185,38 @@ func test_update_margin_parameters_limit{
         expect_revert(error_message="Ownable: caller is not the owner")
     %}
     update_margin_parameters(parameters_len=0, parameters=arr, instruments=0);
+    return ();
+}
+
+// TEST TRADE
+
+@external
+func test_trade_limit{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    // test case: amount = 1, price = 10**6 * (LIMIT + 1)
+    %{
+        start_prank(ids.OWNER)
+        store(context.self_address, "storage_oracles", [10**6 * (ids.LIMIT + 1)], key=[1])
+    %}
+    _trade(caller=ACCOUNT, amount=1, instrument=1);
+    %{
+        position = load(context.self_address, "storage_positions", "Info", key=[ids.ACCOUNT, 1])
+        assert position == [0, 0, 0], f'position error, expected [0, 0, 0], got {position}'
+    %}
+
+    // test case: amount = 10**6 * (LIMIT + 1), price = 1
+    %{ store(context.self_address, "storage_oracles", [1], key=[1]) %}
+    _trade(caller=ACCOUNT, amount=10 ** 6 * (LIMIT + 1), instrument=1);
+    %{
+        position = load(context.self_address, "storage_positions", "Info", key=[ids.ACCOUNT, 1])
+        assert position == [0, 0, 0], f'position error, expected [0, 0, 0], got {position}'
+    %}
+
+    // test case: amount = -10**6 * (LIMIT + 1), price = 1
+    %{ store(context.self_address, "storage_oracles", [1], key=[1]) %}
+    _trade(caller=ACCOUNT, amount=(-(10 ** 6)) * (LIMIT + 1), instrument=1);
+    %{
+        position = load(context.self_address, "storage_positions", "Info", key=[ids.ACCOUNT, 1])
+        assert position == [0, 0, 0], f'position error, expected [0, 0, 0], got {position}'
+    %}
     return ();
 }

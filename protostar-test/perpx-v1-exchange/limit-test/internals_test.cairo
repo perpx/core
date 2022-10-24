@@ -161,7 +161,7 @@ func test_calculate_exit_fees_limit{
     %{ ids.instruments = 2**ids.INSTRUMENT_COUNT - 1 %}
 
     %{
-        imbalance_fee_function = lambda p, a, l, s, n: p*a*(2*l*p + p*a - 2*s*p)//(2*n)
+        imbalance_fee_function = lambda p, a, l, s, n: p*a*(2*l*p + p*a - 2*s*p)//10**12//(2*n)
         for i in range(ids.INSTRUMENT_COUNT):
             store(context.self_address, "storage_oracles", [ids.price], key=[2**i])
             store(context.self_address, "storage_positions", [0, 0, ids.amount], key=[ids.ACCOUNT, 2**i])

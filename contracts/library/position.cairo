@@ -45,9 +45,9 @@ namespace Position {
     // @notice Update position size
     // @param owner The address of the position's owner
     // @param instrument The instrument for the position
-    // @param price The price of the instrument
-    // @param amount The amount of the position update
-    // @param fees The fees for the update
+    // @param price The price of the instrument (precision: 6)
+    // @param amount The amount of the position update (precision: 6)
+    // @param fees The fees for the update (precision: 6)
     func update_position{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
         owner: felt, instrument: felt, price: felt, amount: felt, fees: felt
     ) -> () {
@@ -67,8 +67,8 @@ namespace Position {
     // @notice Close a position
     // @param owner The address of the position's owner
     // @param instrument The instrument for the position
-    // @param price The closing price of the position
-    // @param fees The fees for closing
+    // @param price The closing price of the position (precision: 6)
+    // @param fees The fees for closing (precision: 6)
     // @return delta The owner's margin change
     func close_position{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
         owner: felt, instrument: felt, price: felt, fees: felt

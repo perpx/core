@@ -325,7 +325,7 @@ func test_trade_no_position_valid_margin{
         # calculate the owners margin
         f = sum(fees)
         exit_fees = context.calculate_exit_fees(prices, amounts, longs, shorts, liquidity, fee_rate, ids.VOLATILITY_FEE_RATE_PRECISION)
-        pnl = sum([p*a for (p,a) in zip(prices, amounts)]) 
+        pnl = sum([p*a//10**6 for (p,a) in zip(prices, amounts)]) 
         margin = ids.provide_amount + pnl - f - exit_fees
 
         # calculate the minimum margin for the instruments owner
@@ -377,7 +377,7 @@ func test_trade_no_position_valid_margin{
 
         position = load(ids.address, "storage_positions", "Info", key=[ids.ACCOUNT, 2**instrument])
         signed_pos = [context.signed_int(x) for x in position]
-        assert signed_pos == [fees, ids.trade_amount * int(pos_price), ids.trade_amount], f'position error, expected {[fees, ids.trade_amount * int(pos_price), ids.trade_amount]}, got {signed_pos}'
+        assert signed_pos == [fees, ids.trade_amount * int(pos_price)//10**6, ids.trade_amount], f'position error, expected {[fees, ids.trade_amount * int(pos_price)//10**6, ids.trade_amount]}, got {signed_pos}'
 
         new_longs = load(ids.address, "storage_longs", "felt", key=[2**instrument])[0]
         assert new_longs == int(pos_longs) + ids.trade_amount, f'longs error, expected {int(pos_longs) + ids.trade_amount}, got {new_longs}'
@@ -448,7 +448,7 @@ func test_trade_no_position_invalid_margin{
         # calculate the owners margin
         f = sum(fees)
         exit_fees = context.calculate_exit_fees(prices, amounts, longs, shorts, liquidity, fee_rate, ids.VOLATILITY_FEE_RATE_PRECISION)
-        pnl = sum([p*a - c for (p,a, c) in zip(prices, amounts, costs)]) 
+        pnl = sum([p*a//10**6 - c for (p,a, c) in zip(prices, amounts, costs)]) 
         margin = ids.provide_amount + pnl - f - exit_fees
 
         # calculate the minimum margin for the instruments owner
@@ -554,7 +554,7 @@ func test_trade_position_same_sign_valid_margin{
         # calculate the owners margin
         f = sum(fees)
         exit_fees = context.calculate_exit_fees(prices, amounts, longs, shorts, liquidity, fee_rate, ids.VOLATILITY_FEE_RATE_PRECISION)
-        pnl = sum([p*a for (p,a) in zip(prices, amounts)]) 
+        pnl = sum([p*a//10**6 for (p,a) in zip(prices, amounts)]) 
         margin = ids.provide_amount + pnl - f - exit_fees
 
         # calculate the minimum margin for the instruments owner
@@ -593,7 +593,7 @@ func test_trade_position_same_sign_valid_margin{
 
         position = load(ids.address, "storage_positions", "Info", key=[ids.ACCOUNT, 2**instrument])
         signed_pos = [context.signed_int(x) for x in position]
-        assert signed_pos == [fees, prices[index] * ids.trade_amount, amounts[index] + ids.trade_amount], f'position error, expected {[fees, prices[index] * ids.trade_amount, amounts[index] + ids.trade_amount]}, got {signed_pos}'
+        assert signed_pos == [fees, prices[index] * ids.trade_amount//10**6, amounts[index] + ids.trade_amount], f'position error, expected {[fees, prices[index] * ids.trade_amount//10**6, amounts[index] + ids.trade_amount]}, got {signed_pos}'
 
         new_longs = load(ids.address, "storage_longs", "felt", key=[2**instrument])[0]
         assert new_longs == longs[index] + ids.trade_amount, f'longs error, expected {longs[index] + ids.trade_amount}, got {new_longs}'
@@ -655,7 +655,7 @@ func test_trade_position_same_sign_invalid_margin{
         # calculate the owners margin
         f = sum(fees)
         exit_fees = context.calculate_exit_fees(prices, amounts, longs, shorts, liquidity, fee_rate, ids.VOLATILITY_FEE_RATE_PRECISION)
-        pnl = sum([p*a-c for (p,a,c) in zip(prices, amounts, costs)]) 
+        pnl = sum([p*a//10**6-c for (p,a,c) in zip(prices, amounts, costs)]) 
         margin = ids.provide_amount + pnl - f - exit_fees
 
         # calculate the minimum margin for the instruments owner
@@ -768,7 +768,7 @@ func test_trade_position_opposite_sign_non_null{
 
         position = load(ids.address, "storage_positions", "Info", key=[ids.ACCOUNT, 2**instrument])
         signed_pos = [context.signed_int(x) for x in position]
-        assert signed_pos == [fees, int(pos_amounts) * prices[index], amounts[index] + int(pos_amounts)], f'position error, expected {[fees, int(pos_amounts) * prices[index], amounts[index] + int(pos_amounts)]}, got {signed_pos}'
+        assert signed_pos == [fees, int(pos_amounts) * prices[index]//10**6, amounts[index] + int(pos_amounts)], f'position error, expected {[fees, int(pos_amounts) * prices[index]//10**6, amounts[index] + int(pos_amounts)]}, got {signed_pos}'
 
         new_shorts = load(ids.address, "storage_shorts", "felt", key=[2**instrument])[0]
         new_longs = load(ids.address, "storage_longs", "felt", key=[2**instrument])[0]
@@ -850,7 +850,7 @@ func test_trade_position_opposite_sign_null{
         stop_prank_callable() 
         fees_change = context.calculate_imbalance_fees(prices[index], int(pos_amounts), longs[index], shorts[index], liquidity[index])
         fees_change += abs(fees_change) * fee_rate // ids.VOLATILITY_FEE_RATE_PRECISION 
-        cost = -amounts[index] * prices[index]
+        cost = -amounts[index] * prices[index] // 10**6
         delta = -cost - fees_change - fees[index]
 
         collateral = context.signed_int(load(ids.address, "storage_collateral", "felt", key=[ids.ACCOUNT])[0])
@@ -925,7 +925,7 @@ func test_close{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}
         stop_prank_callable() 
         fees_change = context.calculate_imbalance_fees(price, -amount, longs, shorts, liquidity)
         fees_change += abs(fees_change) * fee_rate // ids.VOLATILITY_FEE_RATE_PRECISION 
-        new_cost = cost +  -amount * price
+        new_cost = cost +  -amount * price // 10**6
         delta = -new_cost - fees_change - fee
 
         collateral = context.signed_int(load(ids.address, "storage_collateral", "felt", key=[ids.ACCOUNT])[0])
@@ -996,7 +996,7 @@ func test_remove_collateral{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, rang
         # calculate the owners margin
         f = sum(fees)
         exit_fees = context.calculate_exit_fees(prices, amounts, longs, shorts, liquidity, fee_rate, ids.VOLATILITY_FEE_RATE_PRECISION)
-        pnl = sum([p*a for (p,a) in zip(prices, amounts)])
+        pnl = sum([p*a//10**6 for (p,a) in zip(prices, amounts)])
         margin = ids.provide_amount - ids.remove_amount + pnl - f - exit_fees
 
         # calculate the minimum margin for the instruments owner
@@ -1074,7 +1074,7 @@ func test_execute_queued_operation{syscall_ptr: felt*, pedersen_ptr: HashBuiltin
         # calculate the owners margin
         f = sum(fees)
         exit_fees = context.calculate_exit_fees(prices, amounts, longs, shorts, liquidity, fee_rate, ids.VOLATILITY_FEE_RATE_PRECISION)
-        pnl = sum([p*a for (p,a) in zip(prices, amounts)])
+        pnl = sum([p*a//10**6 for (p,a) in zip(prices, amounts)])
         margin = collateral + pnl - f - exit_fees
 
         # calculate the minimum margin for the instruments owner
@@ -1134,7 +1134,7 @@ func test_execute_queued_operation{syscall_ptr: felt*, pedersen_ptr: HashBuiltin
                 # if empty position and margin requirement met -> update position, instruments and longs/shorts
                 if user_position == [0, 0, 0]:
                     if min_margin_change + min_margin < margin:
-                        user_positions[op[2]] = [fees_change, prices[index]* amount, amount]
+                        user_positions[op[2]] = [fees_change, prices[index]* amount // 10**6, amount]
                         instruments += op[2]
                         if amount > 0:
                             longs[index] += amount
@@ -1155,7 +1155,7 @@ func test_execute_queued_operation{syscall_ptr: felt*, pedersen_ptr: HashBuiltin
                         collateral += context.calculate_collateral_change(prices[index], size, cost, fees_change + fees)
                         user_positions[op[2]] = [0, 0, 0]
                     else:
-                        user_positions[op[2]] = [fees + fees_change, cost + prices[index]* amount, size + amount]
+                        user_positions[op[2]] = [fees + fees_change, cost + prices[index] * amount // 10**6, size + amount]
                     min_margin += min_margin_change
             # close a position
             if op[4] == 1:
