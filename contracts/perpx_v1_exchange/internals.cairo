@@ -14,6 +14,7 @@ from contracts.perpx_v1_exchange.storage import (
 from contracts.perpx_v1_instrument import storage_longs, storage_shorts
 from contracts.perpx_v1_exchange.structures import Parameter
 from contracts.constants.perpx_constants import LIQUIDITY_PRECISION
+from contracts.library.mathx6 import Mathx6
 from contracts.library.vault import storage_liquidity
 from contracts.library.position import Position, Info
 from contracts.library.fees import Fees
@@ -40,7 +41,9 @@ func _calculate_pnl{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_
     if (r == 1) {
         let (price) = storage_oracles.read(mult);
         let (info) = Position.position(owner, mult);
-        let new_pnl = price * info.size - info.cost;
+        tempvar winnings = Mathx6.mul(price, info.size);
+        let new_pnl = winnings - info.cost;
+
         let (p) = _calculate_pnl(owner=owner, instruments=q, mult=mult * 2);
         return (pnl=p + new_pnl);
     }
@@ -91,6 +94,7 @@ func _calculate_exit_fees{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_
         let (price) = storage_oracles.read(mult);
         let (longs) = storage_longs.read(mult);
         let (shorts) = storage_shorts.read(mult);
+
         tempvar notional_longs = price * longs;
         tempvar notional_shorts = price * shorts;
         let (liquidity) = storage_liquidity.read(mult);
