@@ -10,6 +10,9 @@ const PRIME = 2 ** 251 + 17 * 2 ** 192 + 1;
 // Project limit
 const LIMIT = 2 ** 64;
 
+// Project limit for user liquidity
+const LIQUIDITY_LIMIT = 2**54;
+
 // The minimal liquidity in a pool to enable trading
 const MIN_LIQUIDITY = 10 ** 6;
 
