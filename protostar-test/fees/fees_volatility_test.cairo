@@ -47,7 +47,7 @@ func test_liquidity_compute_fees{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*,
     );
     %{
         amount = context.signed_int(ids.amount)
-        imbalance_fees = ids.price * amount * (2*ids.long + ids.price * amount - 2* ids.short) // (2 * ids.MIN_LIQUIDITY)
+        imbalance_fees = ids.price * amount * (2*ids.long + ids.price * amount - 2* ids.short) // 10**12 // (2 * ids.MIN_LIQUIDITY)
         volatility_fee = (abs(imbalance_fees) * volatility_fee_rate) // 10**4
 
         imbalance = context.signed_int(ids.imbalance_fees)
@@ -60,7 +60,7 @@ func test_liquidity_compute_fees{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*,
 }
 
 @external
-func test_longs_shorts_compute_fees_fees{
+func test_longs_shorts_compute_fees{
     syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr
 }(price: felt, amount: felt, liq: felt) {
     alloc_locals;
@@ -83,7 +83,7 @@ func test_longs_shorts_compute_fees_fees{
         price=price, amount=amount, long=LIMIT, short=0, liquidity=liquidity
     );
     %{
-        imbalance_fees = ids.price * amount * (2 * ids.LIMIT + ids.price * amount) // (2 * ids.liquidity)
+        imbalance_fees = ids.price * amount * (2 * ids.LIMIT + ids.price * amount) // 10**12 // (2 * ids.liquidity)
         volatility_fees = abs(imbalance_fees) * volatility_fee_rate // 10**4
 
         imbalance = context.signed_int(ids.imbalance_fees)
@@ -100,7 +100,7 @@ func test_longs_shorts_compute_fees_fees{
         price=price, amount=amount, long=0, short=LIMIT, liquidity=liquidity
     );
     %{
-        imbalance_fees = ids.price * amount * (ids.price * amount - 2 * ids.LIMIT) // (2 * ids.liquidity)
+        imbalance_fees = ids.price * amount * (ids.price * amount - 2 * ids.LIMIT) // 10**12 // (2 * ids.liquidity)
         volatility_fees = abs(imbalance_fees) * volatility_fee_rate // 10**4
 
         imbalance = context.signed_int(ids.imbalance_fees)

@@ -39,7 +39,7 @@ func test_liquidity_compute_imbalance_fees{
 
     %{
         amount = context.signed_int(ids.amount)
-        imbalance_fees = ids.price * amount * (2 * ids.long + ids.price * amount - 2 * ids.short) // (2 * ids.liquidity)
+        imbalance_fees = ids.price * amount * (2 * ids.long + ids.price * amount - 2 * ids.short) // 10**18 // (2 * ids.liquidity)
 
         imbalance = context.signed_int(ids.imbalance_fees)
         assert imbalance == imbalance_fees, f'imbalance fee error, expected {imbalance_fees}, got {imbalance}'
@@ -63,7 +63,7 @@ func test_longs_shorts_compute_imbalance_fees{
     );
     %{
         amount = context.signed_int(ids.amount)
-        imbalance_fees = ids.price * amount * (2 * ids.LIMIT + ids.price * amount) // (2 * ids.liquidity)
+        imbalance_fees = ids.price * amount * (2 * ids.LIMIT + ids.price * amount) // 10**18 // (2 * ids.liquidity)
 
         imbalance = context.signed_int(ids.imbalance_fees)
         assert imbalance == imbalance_fees, f'imbalance fee error, expected {imbalance_fees}, got {imbalance}'
@@ -73,7 +73,7 @@ func test_longs_shorts_compute_imbalance_fees{
         price=price, amount=amount, long=0, short=LIMIT, liquidity=liquidity
     );
     %{
-        imbalance_fees = ids.price * amount * (ids.price * amount - 2 * ids.LIMIT) // (2 * ids.liquidity)
+        imbalance_fees = ids.price * amount * (ids.price * amount - 2 * ids.LIMIT) // 10**18 // (2 * ids.liquidity)
 
         imbalance = context.signed_int(ids.imbalance_fees)
         assert imbalance == imbalance_fees, f'imbalance fee error, expected {imbalance_fees}, got {imbalance}'
