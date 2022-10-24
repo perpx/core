@@ -2,5 +2,4 @@ node_modules
 .*
 starknet-artifacts
 cache
-math*
 back-testing
