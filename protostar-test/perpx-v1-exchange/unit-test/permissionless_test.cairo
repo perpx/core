@@ -247,7 +247,7 @@ func test_escape_close{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_che
     escape_close(instrument=instrument);
     %{
         fees_change = utils.calculate_fees(price, -amount, longs, shorts, liquidity, fee_rate, ids.VOLATILITY_FEE_RATE_PRECISION)
-        new_cost = cost +  -amount * price
+        new_cost = cost +  -amount * price // 10**6
         delta = -new_cost - fees_change - fee
 
         c = utils.signed_int(load(context.self_address, "storage_collateral", "felt", key=[ids.ACCOUNT])[0])
@@ -311,7 +311,7 @@ func test_liquidate_negative_margin{
         # calculate the owners margin
         f = sum(fees)
         exit_fees = utils.calculate_exit_fees(prices, amounts, longs, shorts, liquidity, fee_rate, ids.VOLATILITY_FEE_RATE_PRECISION)
-        pnl = sum([p*a-c for (p,a,c) in zip(prices, amounts, costs)])
+        pnl = sum([p*a//10**6 -c for (p,a,c) in zip(prices, amounts, costs)])
         margin = ids.collateral + pnl - f - exit_fees
 
         # calculate the minimum margin for the instruments owner
@@ -383,7 +383,7 @@ func test_liquidate_positive_min_payout{
         # calculate the owners margin
         f = sum(fees)
         exit_fees = utils.calculate_exit_fees(prices, amounts, longs, shorts, liquidity, fee_rate, ids.VOLATILITY_FEE_RATE_PRECISION)
-        pnl = sum([p*a-c for (p,a,c) in zip(prices, amounts, costs)])
+        pnl = sum([p*a//10**6 -c for (p,a,c) in zip(prices, amounts, costs)])
         margin = pnl - f - exit_fees
 
         # calculate the minimum margin for the instruments owner
@@ -469,7 +469,7 @@ func test_liquidate_positive_min_max_payout{
         # calculate the owners margin
         f = sum(fees)
         exit_fees = utils.calculate_exit_fees(prices, amounts, longs, shorts, liquidity, fee_rate, ids.VOLATILITY_FEE_RATE_PRECISION)
-        pnl = sum([p*a-c for (p,a,c) in zip(prices, amounts, costs)])
+        pnl = sum([p*a//10**6-c for (p,a,c) in zip(prices, amounts, costs)])
         margin = pnl - f - exit_fees
 
         # calculate the minimum margin for the instruments owner
@@ -552,7 +552,7 @@ func test_liquidate_positive_max_payout{
         # calculate the owners margin
         f = sum(fees)
         exit_fees = utils.calculate_exit_fees(prices, amounts, longs, shorts, liquidity, fee_rate, ids.VOLATILITY_FEE_RATE_PRECISION)
-        pnl = sum([p*a-c for (p,a,c) in zip(prices, amounts, costs)])
+        pnl = sum([p*a//10**6-c for (p,a,c) in zip(prices, amounts, costs)])
         margin = pnl - f - exit_fees
 
         # calculate the minimum margin for the instruments owner
@@ -720,8 +720,9 @@ func test_add_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_ch
 
     // prank the approval and the add liquidity calls
     %{
-        ids.amount_1 = ids.random % (ids.LIMIT//100) + 1
-        ids.amount_2 = ids.random % (ids.LIMIT//100 - ids.amount_1) + 1
+        limit = (ids.LIMIT//100 - ids.MIN_LIQUIDITY*10)
+        ids.amount_1 = ids.random % limit + 1
+        ids.amount_2 = (ids.LIMIT//100 - ids.MIN_LIQUIDITY*10) - ids.amount_1
         start_prank(ids.ACCOUNT)
     %}
     ERC20.approve(spender=address, amount=Uint256(2 * LIMIT, 0));
@@ -737,14 +738,15 @@ func test_add_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_ch
         assert user_stake[0] == ids.amount_1*100, f'user stake shares error, expected {ids.amount_1 * 100}, got {user_stake[0]}'
         assert account_balance == [ids.RANGE_CHECK_BOUND-1-ids.amount_1, 0], f'account balance error, expected [{ids.RANGE_CHECK_BOUND-1-ids.amount_1}, 0] got {account_balance}'
         assert exchange_balance == [ids.amount_1, 0], f'exchange balance error, expected [{ids.amount_1}, 0] got {exchange_balance}'
+        liq = ids.MIN_LIQUIDITY * 10 + ids.amount_1
     %}
 
     // add liquidity
     add_liquidity(amount=amount_2, instrument=INSTRUMENT);
     %{
+        liq = ids.MIN_LIQUIDITY * 10 + ids.amount_1
         stake = load(context.self_address, "storage_user_stake", "Stake", key=[ids.ACCOUNT, ids.INSTRUMENT])
-
-        assert stake[0] == user_stake[0] + ids.amount_2*user_stake[0]//ids.amount_1, f'user stake shares error, expected {user_stake[0] + ids.amount_2*user_stake[0]//ids.amount_1}, got {stake[0]}'
+        assert stake[0] == user_stake[0] + ids.amount_2*user_stake[0]//liq, f'user stake shares error, expected {user_stake[0] + ids.amount_2*user_stake[0]//liq}, got {stake[0]}'
     %}
 
     return ();
