@@ -26,6 +26,7 @@
   },
   "dependencies": {
     "dotenv": "^16.0.3",
-    "starknet": "^4.4.2"
+    "starknet": "^4.4.2",
+    "tslog": "^3.3.4"
   }
 }

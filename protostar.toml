@@ -8,7 +8,7 @@ libs_path = "lib"
 cairo-path = ["./lib/cairo_contracts_git/src", "./lib/cairo_math_64x61_git/contracts"]
 
 ["protostar.build"]
-output = "./starknet-artifacts/protostar"
+compiled-contracts-dir = "./starknet-artifacts/protostar"
 
 ["protostar.contracts"]
 exchange=[
