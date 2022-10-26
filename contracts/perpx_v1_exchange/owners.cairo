@@ -88,9 +88,9 @@ func update_prices{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_p
     _update_prices(
         prices_len=prices_len, prices=prices, mult=1, instrument=0, instruments=instruments
     );
-    _execute_queued_operations();
     let (count) = storage_instrument_count.read();
     _update_volatility(instrument_count=count, mult=1, ts=ts);
+    _execute_queued_operations();
     storage_last_price_update_ts.write(ts);
     return ();
 }
