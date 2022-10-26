@@ -30,6 +30,17 @@ from contracts.perpx_v1_exchange.storage import (
     storage_instrument_count,
     storage_queue_limit,
 )
+from contracts.perpx_v1_exchange.setters import (
+    set_fee_rate,
+    set_last_update_price_delta,
+    reset_is_escaping,
+)
+from contracts.perpx_v1_exchange.getters import (
+    view_user_instruments,
+    view_price,
+    view_volatility,
+    view_margin_parameters,
+)
 
 //
 // Constructor
