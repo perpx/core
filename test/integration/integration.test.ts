@@ -1,13 +1,18 @@
 import {
     getAccount,
     deployContract,
-    callContract,
-    getContract,
+    updateContractAddress,
+    getContractAddress,
+    mintAndApprove,
+    initializeExchangeContract,
     getRandomInt,
+    saveLastOperation,
+    getlastOperation,
 } from './utils/utils'
-import { Operation, operation } from './utils/types'
+import { operation } from './utils/types'
 import data from './data/data_cleaned.json'
 import { Logger } from 'tslog'
+import { Account } from 'starknet'
 
 const log: Logger = new Logger()
 
@@ -19,59 +24,77 @@ let counter = 1
 const pathErc20 = './starknet-artifacts/protostar/erc20.json'
 const pathExchange = './starknet-artifacts/protostar/exchange.json'
 
+main()
+
 async function main() {
-    // deploy the contracts
     const owner = await getAccount(0)
     map.set(owner.address, 0)
+    await deploy(owner)
+    await process_operations(owner)
+}
+
+async function deploy(owner: Account) {
+    // deploy the contracts
     const erc20Args = {
-        name: '370912461878743590817382610804631918',
-        symbol: '1431520323',
-        decimals: '6',
-        initial_supply_low: '10',
-        initial_supply_high: '0',
+        name: 370912461878743590817382610804631918n,
+        symbol: 1431520323n,
+        decimals: 6n,
+        initial_supply_low: 100_000_000_000n,
+        initial_supply_high: 0n,
         recipient: owner.address,
         owner: owner.address,
     }
     const erc20Address = await deployContract(pathErc20, erc20Args)
+    updateContractAddress('erc20', erc20Address)
     log.info('Deployed erc20')
+
     const exchangeArgs = [
         owner.address,
         erc20Address,
-        '10',
-        '100',
+        10n,
+        100n,
         // length of the array
-        '10',
+        10n,
         // array
-        '20000',
-        '2574',
-        '1',
-        '2',
-        '3',
-        '4',
-        '5',
-        '6',
-        '7',
-        '8',
+        20_000n,
+        2_574n,
+        1n,
+        2n,
+        3n,
+        4n,
+        5n,
+        6n,
+        7n,
+        8n,
     ]
     const exchangeAddress = await deployContract(pathExchange, exchangeArgs)
+    updateContractAddress('exchange', exchangeAddress)
     log.info(`Deployed exchange at ${exchangeAddress}`)
-    await owner.execute({
-        entrypoint: 'set_last_update_price_delta',
-        contractAddress: exchangeAddress,
-        calldata: ['2'],
-    })
-    log.info('Set last update price delta')
 
+    await initializeExchangeContract(owner, exchangeAddress, erc20Address)
+    log.info('Initialized exchange contract')
+    saveLastOperation(0)
+}
+
+async function process_operations(owner: Account) {
     // run the operations throught the contract
+    let exchangeAddress = getContractAddress('exchange')
+    let erc20Address = getContractAddress('erc20')
+
+    let lastOperation = getlastOperation()
+    let i = 0
+
     let block = data[0].block
     let price = 2_574
     let valid_until = 100
     let ts = 100_000
 
-    for (let e of data) {
+    for (let e of data.slice(lastOperation)) {
+        log.info(`Applying operation ${e.type}`)
         let index: number
         let b = e.block
         if (b > block) {
+            log.info('Executing trades')
             await owner.execute({
                 entrypoint: 'update_prices',
                 contractAddress: exchangeAddress,
@@ -95,42 +118,63 @@ async function main() {
                 price = parseInt(e.price!, 10)
                 let factor = e.isLong ? 1n : -1n
                 let amount = BigInt(e.amount!) * factor
-                account.execute({
+                await account.execute({
                     entrypoint: 'trade',
                     contractAddress: exchangeAddress,
                     calldata: [amount.toString(), 1, block + valid_until],
                 })
                 positions.set(BigInt(e.positionId!), account.address)
+                break
             }
             case operation.ClosePosition: {
                 let account = await getAccount(index)
-                account.execute({
+                await account.execute({
                     entrypoint: 'close',
                     contractAddress: exchangeAddress,
                     calldata: [1, block + valid_until],
                 })
                 price = parseInt(e.price!, 10)
                 positions.delete(BigInt(e.positionId!))
+                break
             }
+            // TODO if liquidate does not pass (add try/catch), close the position
             case operation.Liquidate: {
                 let user = positions.get(BigInt(e.positionId!)) ?? '0'
-                account.execute({
+                await account.execute({
                     entrypoint: 'liquidate',
                     contractAddress: exchangeAddress,
                     calldata: [user],
                 })
                 positions.delete(BigInt(e.positionId!))
+                break
             }
             case operation.AddCollateral: {
                 let account = await getAccount(index)
-                account.execute({
+                await account.execute({
                     entrypoint: 'add_collateral',
                     contractAddress: exchangeAddress,
                     calldata: [e.amount!],
                 })
+                break
+            }
+            case operation.ProvideLiquidity: {
+                let account = await getAccount(index)
+                await mintAndApprove(
+                    owner,
+                    account,
+                    erc20Address,
+                    exchangeAddress,
+                    e.amount!
+                )
+                await account.execute({
+                    entrypoint: 'add_liquidity',
+                    contractAddress: exchangeAddress,
+                    calldata: [e.amount!, 1],
+                })
+                break
             }
         }
+        saveLastOperation(lastOperation + i)
+        i++
     }
 }
-
-main()
