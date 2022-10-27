@@ -9,9 +9,7 @@ export function getProvider() {
     const url = process.env.PROVIDER_URL
     if (url !== undefined) {
         const options: ProviderOptions = { sequencer: { baseUrl: url } }
-        const provider = new Provider(options)
-
-        return provider
+        return new Provider(options)
     }
 }
 
@@ -22,8 +20,7 @@ export async function getAccount(index: number) {
     const res = await response.json()
     const provider = getProvider()!
     const starkKeyPair = ec.getKeyPair(res[index].private_key)
-    const account = new Account(provider, res[index].address, starkKeyPair)
-    return account
+    return new Account(provider, res[index].address, starkKeyPair)
 }
 
 export async function getContract(path: string, address: string) {
@@ -54,18 +51,106 @@ export async function deployContract(
     return response.contract_address
 }
 
-export async function callContract(
-    path: string,
-    address: string,
-    entrypoint: string,
-    calldata: any[]
+///
+/// EXCHANGE
+///
+
+export async function initializeExchangeContract(
+    owner: Account,
+    exchangeAddress: string,
+    erc20Address: string
 ) {
-    const provider = getProvider()
-    const compiled = json.parse(fs.readFileSync(path).toString('ascii'))
+    await owner.execute([
+        {
+            entrypoint: 'set_last_update_price_delta',
+            contractAddress: exchangeAddress,
+            calldata: [2],
+        },
+        {
+            entrypoint: 'set_fee_rate',
+            contractAddress: exchangeAddress,
+            calldata: [100],
+        },
+    ])
+    const resp = await owner.execute({
+        entrypoint: 'approve',
+        contractAddress: erc20Address,
+        calldata: [exchangeAddress, 200_000_000_000, 0],
+    })
+    console.log(resp)
+}
 
-    const contract = new Contract(compiled.abi, address, provider)
+///
+/// ERC20
+///
+export async function mintAndApprove(
+    owner: Account,
+    account: Account,
+    erc20Address: string,
+    exchangeAddress: string,
+    amount: string
+) {
+    await owner.execute({
+        entrypoint: 'mint',
+        contractAddress: erc20Address,
+        calldata: [account.address, amount, '0'],
+    })
+    await account.execute({
+        entrypoint: 'approve',
+        contractAddress: erc20Address,
+        calldata: [exchangeAddress, amount, '0'],
+    })
+}
 
-    return await contract.call(entrypoint, calldata)
+///
+/// CONTRACTS STORAGE
+///
+
+export function updateContractAddress(name: string, address: string) {
+    let addresses
+    try {
+        addresses = fs
+            .readFileSync('./test/integration/data/addresses.json')
+            .toString('ascii')
+        if (!addresses) {
+            addresses = {}
+        } else {
+            addresses = JSON.parse(addresses)
+        }
+    } catch (e) {
+        addresses = {}
+    }
+    const newAddresses = { ...addresses, [name]: address }
+    fs.writeFileSync(
+        './test/integration/data/addresses.json',
+        JSON.stringify(newAddresses)
+    )
+}
+
+export function getContractAddress(name: string) {
+    const addresses = JSON.parse(
+        fs
+            .readFileSync('./test/integration/data/addresses.json')
+            .toString('ascii')
+    )
+    return addresses[name]
+}
+
+export function saveLastOperation(index: number) {
+    const newOperation = { index: index }
+    fs.writeFileSync(
+        './test/integration/data/operation.json',
+        JSON.stringify(newOperation)
+    )
+}
+
+export function getlastOperation() {
+    const operation = JSON.parse(
+        fs
+            .readFileSync('./test/integration/data/operation.json')
+            .toString('ascii')
+    )
+    return operation['index']
 }
 
 ///
