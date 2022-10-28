@@ -155,23 +155,21 @@ func _update_prices{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_
     let (q, r) = unsigned_div_rem(instruments, 2);
     if (r == 1) {
         storage_oracles.write(mult, [prices]);
-        _update_prices(
+        return _update_prices(
             prices_len=prices_len - 1,
             prices=prices + 1,
             mult=mult * 2,
             instrument=instrument + 1,
             instruments=q,
         );
-    } else {
-        _update_prices(
-            prices_len=prices_len,
-            prices=prices,
-            mult=mult * 2,
-            instrument=instrument + 1,
-            instruments=q,
-        );
     }
-    return ();
+    return _update_prices(
+        prices_len=prices_len,
+        prices=prices,
+        mult=mult * 2,
+        instrument=instrument + 1,
+        instruments=q,
+    );
 }
 
 // @notice Update the margin parameters
