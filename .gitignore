@@ -1,5 +1,11 @@
+# node
 node_modules
 .*
+# artifacts
 starknet-artifacts
 cache
+# backtesting
 back-testing
+#data
+**/data/addresses.json
+**/data/operation.json
