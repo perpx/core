@@ -61,6 +61,10 @@ export async function initializeExchangeContract(
     exchangeAddress: string,
     erc20Address: string
 ) {
+    const FRACT_PART = BigInt(2 ** 61)
+    let k = BigInt(42) * FRACT_PART // parameter for eth
+    let tau = BigInt(36000) * FRACT_PART // half life of 10 hours
+    let params = Array(10).fill([k.toString(), tau.toString()]).flat()
     await owner.execute([
         {
             entrypoint: 'set_last_update_price_delta',
@@ -72,16 +76,33 @@ export async function initializeExchangeContract(
             contractAddress: exchangeAddress,
             calldata: [100],
         },
+        {
+            entrypoint: 'update_margin_parameters',
+            contractAddress: exchangeAddress,
+            calldata: [10, ...params, 1023],
+        },
     ])
-    const resp = await owner.execute({
+    await owner.execute({
         entrypoint: 'approve',
         contractAddress: erc20Address,
         calldata: [exchangeAddress, 200_000_000_000, 0],
     })
 }
 
-export async function getQueueCount(path: string, address: string) {
-    return await callContract(path, address, 'view_operations_count', [])
+export async function getContractInformations(path: string, address: string) {
+    let results = {
+        operations_count: 0,
+        price: 0,
+        is_escaping: 0,
+    }
+    results['operations_count'] = (
+        await callContract(path, address, 'view_operations_count', [])
+    )[0]
+    results['price'] = (await callContract(path, address, 'view_price', [2]))[0]
+    results['is_escaping'] = (
+        await callContract(path, address, 'view_is_escaping', [])
+    )[0]
+    return results
 }
 
 ///
