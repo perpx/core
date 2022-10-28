@@ -7,6 +7,7 @@ from contracts.perpx_v1_exchange.storage import (
     storage_oracles,
     storage_volatility,
     storage_margin_parameters,
+    storage_operations_count,
 )
 from contracts.perpx_v1_exchange.structures import Parameter
 
@@ -36,4 +37,11 @@ func view_margin_parameters{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, rang
     instrument: felt
 ) -> (param: Parameter) {
     return storage_margin_parameters.read(instrument);
+}
+
+@view
+func view_operations_count{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() -> (
+    count: felt
+) {
+    return storage_operations_count.read();
 }

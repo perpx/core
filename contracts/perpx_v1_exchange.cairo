@@ -40,6 +40,7 @@ from contracts.perpx_v1_exchange.getters import (
     view_price,
     view_volatility,
     view_margin_parameters,
+    view_operations_count,
 )
 
 //
