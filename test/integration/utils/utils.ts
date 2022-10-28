@@ -2,6 +2,7 @@ import fs from 'fs'
 import { config } from 'dotenv'
 import { Provider, ProviderOptions, Account, ec } from 'starknet'
 import { json, Contract } from 'starknet'
+import { callContract } from '../utils/read'
 config()
 
 export function getProvider() {
@@ -77,7 +78,10 @@ export async function initializeExchangeContract(
         contractAddress: erc20Address,
         calldata: [exchangeAddress, 200_000_000_000, 0],
     })
-    console.log(resp)
+}
+
+export async function getQueueCount(path: string, address: string) {
+    return await callContract(path, address, 'view_operations_count', [])
 }
 
 ///
