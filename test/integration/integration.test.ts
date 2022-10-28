@@ -5,6 +5,7 @@ import {
     getContractAddress,
     mintAndApprove,
     initializeExchangeContract,
+    getQueueCount,
     getRandomInt,
     saveLastOperation,
     getlastOperation,
@@ -18,6 +19,7 @@ const log: Logger = new Logger()
 
 let map = new Map<string, number>()
 // maps from position id to user
+// for 3000 operations, run 1000 users on starknet-devnet
 let positions = new Map<bigint, string>()
 let counter = 1
 
@@ -90,7 +92,6 @@ async function process_operations(owner: Account) {
     let ts = 100_000
 
     for (let e of data.slice(lastOperation)) {
-        log.info(`Applying operation ${e.type}`)
         let index: number
         let b = e.block
         if (b > block) {
@@ -113,6 +114,7 @@ async function process_operations(owner: Account) {
             counter++
         }
         let account = await getAccount(index)
+        log.info(`Applying operation ${e.type}`)
         switch (e.type) {
             case operation.OpenPosition: {
                 price = parseInt(e.price!, 10)
@@ -139,17 +141,26 @@ async function process_operations(owner: Account) {
             }
             // TODO if liquidate does not pass (add try/catch), close the position
             case operation.Liquidate: {
-                let user = positions.get(BigInt(e.positionId!)) ?? '0'
-                await account.execute({
-                    entrypoint: 'liquidate',
-                    contractAddress: exchangeAddress,
-                    calldata: [user],
-                })
-                positions.delete(BigInt(e.positionId!))
+                let user = positions.get(BigInt(e.positionId!)) ?? ''
+                if (user) {
+                    await account.execute({
+                        entrypoint: 'liquidate',
+                        contractAddress: exchangeAddress,
+                        calldata: [user],
+                    })
+                    positions.delete(BigInt(e.positionId!))
+                }
                 break
             }
             case operation.AddCollateral: {
                 let account = await getAccount(index)
+                await mintAndApprove(
+                    owner,
+                    account,
+                    erc20Address,
+                    exchangeAddress,
+                    e.amount!
+                )
                 await account.execute({
                     entrypoint: 'add_collateral',
                     contractAddress: exchangeAddress,
@@ -174,7 +185,11 @@ async function process_operations(owner: Account) {
                 break
             }
         }
-        saveLastOperation(lastOperation + i)
+        log.info(
+            'Current queue',
+            await getQueueCount(pathExchange, exchangeAddress)
+        )
         i++
+        saveLastOperation(lastOperation + i)
     }
 }
