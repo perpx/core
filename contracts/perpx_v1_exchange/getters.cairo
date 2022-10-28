@@ -5,9 +5,11 @@ from starkware.cairo.common.cairo_builtins import HashBuiltin
 from contracts.perpx_v1_exchange.storage import (
     storage_user_instruments,
     storage_oracles,
+    storage_prev_oracles,
     storage_volatility,
     storage_margin_parameters,
     storage_operations_count,
+    storage_is_escaping,
 )
 from contracts.perpx_v1_exchange.structures import Parameter
 
@@ -23,6 +25,13 @@ func view_price{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}
     instrument: felt
 ) -> (price: felt) {
     return storage_oracles.read(instrument);
+}
+
+@view
+func view_prev_price{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    instrument: felt
+) -> (price: felt) {
+    return storage_prev_oracles.read(instrument);
 }
 
 @view
@@ -44,4 +53,11 @@ func view_operations_count{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range
     count: felt
 ) {
     return storage_operations_count.read();
+}
+
+@view
+func view_is_escaping{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() -> (
+    escaping: felt
+) {
+    return storage_is_escaping.read();
 }

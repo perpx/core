@@ -1,6 +1,7 @@
 %lang starknet
 
 from starkware.cairo.common.cairo_builtins import HashBuiltin
+from starkware.cairo.common.pow import pow
 
 from contracts.utils.access_control import init_access_control
 from contracts.perpx_v1_exchange.permissionless import (
@@ -22,13 +23,13 @@ from contracts.perpx_v1_exchange.owners import (
     update_prices,
     update_margin_parameters,
     flush_queue,
-    update_prev_prices,
-    _update_prev_prices,
+    _update_prices,
 )
 from contracts.perpx_v1_exchange.storage import (
     storage_token,
     storage_instrument_count,
     storage_queue_limit,
+    storage_last_price_update_ts,
 )
 from contracts.perpx_v1_exchange.setters import (
     set_fee_rate,
@@ -38,9 +39,11 @@ from contracts.perpx_v1_exchange.setters import (
 from contracts.perpx_v1_exchange.getters import (
     view_user_instruments,
     view_price,
+    view_prev_price,
     view_volatility,
     view_margin_parameters,
     view_operations_count,
+    view_is_escaping,
 )
 
 //
