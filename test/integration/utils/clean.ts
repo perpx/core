@@ -1,6 +1,7 @@
 import fs from 'fs'
 import { Operation, operation } from '../utils/types'
 import data from '../data/data.json'
+import clean_data from '../data/data_cleaned.json'
 
 const LIMIT = 3000
 
@@ -34,6 +35,7 @@ function clean() {
             let price = BigInt(data[i]['close-position']!['price']!)
             myData.push({
                 user: data[i]['close-position']!.user,
+                positionId: BigInt(data[i]['close-position']!['position-id']!),
                 price: price / BigInt(100),
                 block: block,
                 type: operation.ClosePosition,
@@ -87,7 +89,32 @@ function clean() {
     )
 }
 
-clean()
+function checkUsers() {
+    let map = new Map<string, boolean>()
+    for (let i = 0; i < LIMIT; i++) {
+        switch (clean_data[i].type) {
+            case operation.OpenPosition: {
+                map.has(clean_data[i].user!)
+                    ? 0
+                    : map.set(clean_data[i].user!, true)
+                break
+            }
+            case operation.AddCollateral: {
+                map.has(clean_data[i].user!)
+                    ? 0
+                    : map.set(clean_data[i].user!, true)
+                break
+            }
+            case operation.ProvideLiquidity: {
+                map.has(clean_data[i].user!)
+                    ? 0
+                    : map.set(clean_data[i].user!, true)
+                break
+            }
+        }
+    }
+    console.log('MAP SIZE', map.size)
+}
 
 function copy() {
     let testData = []
