@@ -5,7 +5,7 @@ import {
     getContractAddress,
     mintAndApprove,
     initializeExchangeContract,
-    getQueueCount,
+    getContractInformations,
     getRandomInt,
     saveLastOperation,
     getlastOperation,
@@ -25,6 +25,8 @@ let counter = 1
 
 const pathErc20 = './starknet-artifacts/protostar/erc20.json'
 const pathExchange = './starknet-artifacts/protostar/exchange.json'
+
+const TS = 100_000
 
 main()
 
@@ -52,22 +54,23 @@ async function deploy(owner: Account) {
 
     const exchangeArgs = [
         owner.address,
+        TS,
         erc20Address,
         10n,
         100n,
         // length of the array
         10n,
         // array
-        20_000n,
-        2_574n,
-        1n,
-        2n,
-        3n,
-        4n,
-        5n,
-        6n,
-        7n,
-        8n,
+        20_000_000_000n,
+        2_574_000_000n,
+        1_000_000n,
+        2_000_000n,
+        3_000_000n,
+        4_000_000n,
+        5_000_000n,
+        6_000_000n,
+        7_000_000n,
+        8_000_000n,
     ]
     const exchangeAddress = await deployContract(pathExchange, exchangeArgs)
     updateContractAddress('exchange', exchangeAddress)
@@ -87,20 +90,21 @@ async function process_operations(owner: Account) {
     let i = 0
 
     let block = data[0].block
-    let price = 2_574
+    let price = 2_574_000_000
     let valid_until = 100
-    let ts = 100_000
+    let ts = TS
 
     for (let e of data.slice(lastOperation)) {
         let index: number
         let b = e.block
         if (b > block) {
             log.info('Executing trades')
+            let prices = Array(10).fill(price)
             await owner.execute({
                 entrypoint: 'update_prices',
                 contractAddress: exchangeAddress,
 
-                calldata: ['1', price, '2', ts],
+                calldata: [10, ...prices, 1023, ts],
             })
             block = b
             ts += getRandomInt(4)
@@ -186,8 +190,8 @@ async function process_operations(owner: Account) {
             }
         }
         log.info(
-            'Current queue',
-            await getQueueCount(pathExchange, exchangeAddress)
+            'Contract status',
+            await getContractInformations(pathExchange, exchangeAddress)
         )
         i++
         saveLastOperation(lastOperation + i)
