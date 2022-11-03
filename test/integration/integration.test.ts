@@ -5,10 +5,11 @@ import {
     getContractAddress,
     mintAndApprove,
     initializeExchangeContract,
-    getContractInformations,
     getRandomInt,
     saveLastOperation,
     getlastOperation,
+    saveContractInformations,
+    initContractInformations,
 } from './utils/utils'
 import { operation } from './utils/types'
 import data from './data/data_cleaned.json'
@@ -27,6 +28,7 @@ const pathErc20 = './starknet-artifacts/protostar/erc20.json'
 const pathExchange = './starknet-artifacts/protostar/exchange.json'
 
 const TS = 100_000
+const SAVING = 10
 
 main()
 
@@ -78,6 +80,7 @@ async function deploy(owner: Account) {
 
     await initializeExchangeContract(owner, exchangeAddress, erc20Address)
     log.info('Initialized exchange contract')
+    initContractInformations()
     saveLastOperation(0)
 }
 
@@ -124,11 +127,25 @@ async function process_operations(owner: Account) {
                 price = parseInt(e.price!, 10)
                 let factor = e.isLong ? 1n : -1n
                 let amount = BigInt(e.amount!) * factor
-                await account.execute({
-                    entrypoint: 'trade',
-                    contractAddress: exchangeAddress,
-                    calldata: [amount.toString(), 1, block + valid_until],
-                })
+                await mintAndApprove(
+                    owner,
+                    account,
+                    erc20Address,
+                    exchangeAddress,
+                    e.margin!
+                )
+                await account.execute([
+                    {
+                        entrypoint: 'add_collateral',
+                        contractAddress: exchangeAddress,
+                        calldata: [e.margin!],
+                    },
+                    {
+                        entrypoint: 'trade',
+                        contractAddress: exchangeAddress,
+                        calldata: [amount.toString(), 2, block + valid_until],
+                    },
+                ])
                 positions.set(BigInt(e.positionId!), account.address)
                 break
             }
@@ -137,7 +154,7 @@ async function process_operations(owner: Account) {
                 await account.execute({
                     entrypoint: 'close',
                     contractAddress: exchangeAddress,
-                    calldata: [1, block + valid_until],
+                    calldata: [2, block + valid_until],
                 })
                 price = parseInt(e.price!, 10)
                 positions.delete(BigInt(e.positionId!))
@@ -184,15 +201,14 @@ async function process_operations(owner: Account) {
                 await account.execute({
                     entrypoint: 'add_liquidity',
                     contractAddress: exchangeAddress,
-                    calldata: [e.amount!, 1],
+                    calldata: [e.amount!, 2],
                 })
                 break
             }
         }
-        log.info(
-            'Contract status',
-            await getContractInformations(pathExchange, exchangeAddress)
-        )
+        if (i % SAVING == 0) {
+            saveContractInformations(pathExchange, exchangeAddress)
+        }
         i++
         saveLastOperation(lastOperation + i)
     }
