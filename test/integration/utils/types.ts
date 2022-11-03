@@ -13,6 +13,7 @@ export enum operation {
 
 export interface Operation {
     amount?: bigint
+    margin?: bigint
     price?: bigint
     instrument?: bigint
     positionId?: bigint

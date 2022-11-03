@@ -25,6 +25,7 @@ function clean() {
                 user: data[i]['open-position']!.user,
                 positionId: BigInt(data[i]['open-position']!['position-id']!),
                 amount: amount,
+                margin: margin / BigInt(100),
                 price: price / BigInt(100),
                 isLong: true,
                 block: block,
