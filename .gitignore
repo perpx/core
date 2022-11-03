@@ -8,4 +8,5 @@ cache
 back-testing
 #data
 **/data/addresses.json
+**/data/output.json
 **/data/operation.json
