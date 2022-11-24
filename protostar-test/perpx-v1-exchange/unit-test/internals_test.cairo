@@ -46,7 +46,11 @@ func __setup__{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
         import importlib  
         utils = importlib.import_module("protostar-test.perpx-v1-exchange.utils")
         context.signed_int = utils.signed_int
+        context.calculate_exit_fees = utils.calculate_exit_fees
+        context.calculate_margin_requirement = utils.calculate_margin_requirement
+        context.to_felt = utils.to_felt
         context.self_address = ids.address
+        store(context.self_address, "storage_instrument_count", [ids.INSTRUMENT_COUNT])
         max_examples(200)
     %}
     return ();
@@ -55,20 +59,27 @@ func __setup__{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
 // TEST VERIFY LENGTH
 
 @external
+func setup_verify_length{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    %{
+        example(length=1)
+        example(length=ids.INSTRUMENT_COUNT)
+        given(
+            length = strategy.integers(1, ids.INSTRUMENT_COUNT)
+        )
+    %}
+    return ();
+}
+
+@external
 func test_verify_length{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
-    random: felt
+    length: felt
 ) {
     alloc_locals;
     local instruments;
-    local length;
     %{
-        assume(ids.random !=0)
-        from random import randint, sample, seed
-        seed(ids.random)
-        # generate random length and according instruments value
-        ids.length = ids.random % ids.INSTRUMENT_COUNT + 1
-        instruments = sum([2**x for x in sample(range(ids.INSTRUMENT_COUNT), ids.length)])
-        ids.instruments = instruments
+        from random import sample
+        # generate random instrument values
+        ids.instruments = sum([2**x for x in sample(range(ids.INSTRUMENT_COUNT), ids.length)])
     %}
     _verify_length(length=length, instruments=instruments);
     return ();
@@ -77,19 +88,21 @@ func test_verify_length{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_ch
 // TEST VERIFY INSTRUMENTS
 
 @external
-func test_verify_instruments{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
-    random: felt
-) {
-    alloc_locals;
-    local instruments;
+func setup_verify_instruments{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
     %{
-        assume(ids.random !=0)
-        from random import randint, sample, seed
-        seed(ids.random)
-        # generate random instruments and store the instrument count
-        ids.instruments = randint(1, 2**ids.INSTRUMENT_COUNT - 1)
-        store(context.self_address, "storage_instrument_count", [ids.INSTRUMENT_COUNT])
+        example(instruments=1)
+        example(instruments=2**ids.INSTRUMENT_COUNT-1)
+        given(
+            instruments = strategy.integers(1, 2**ids.INSTRUMENT_COUNT-1)
+        )
     %}
+    return ();
+}
+
+@external
+func test_verify_instruments{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    instruments: felt
+) {
     _verify_instruments(instruments=instruments);
     return ();
 }
@@ -97,21 +110,25 @@ func test_verify_instruments{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, ran
 // TEST VERIFY INSTRUMENT
 
 @external
-func test_verify_instrument{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
-    random: felt
-) {
-    alloc_locals;
-    local instrument;
+func setup_verify_instrument{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
     %{
-        from random import randint, seed
+        example(instrument=0)
+        example(instrument=2**ids.INSTRUMENT_COUNT-1)
+        given(
+            instrument = strategy.integers(0, 2**ids.INSTRUMENT_COUNT-1)
+        )
+    %}
+    return ();
+}
+
+@external
+func test_verify_instrument{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    instrument: felt
+) {
+    %{
         import math
-        seed(ids.random)
-        # generate random instruments and store the instrument count
-        ids.instrument = randint(0, 2**ids.INSTRUMENT_COUNT - 1)
-        if not math.log2(ids.instrument).is_integer():
+        if ids.instrument != 0 and not math.log2(ids.instrument).is_integer():
             expect_revert()
-        if ids.instruments > 2**(ids.INSTRUMENT_COUNT - 1):
-            expect_revert(error_message="instrument limited to 2**(instrument_count - 1)")
     %}
     _verify_instrument(instrument=instrument);
     return ();
@@ -120,22 +137,26 @@ func test_verify_instrument{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, rang
 // TEST CALCULATE PNL
 
 @external
+func setup_calculate_pnl{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    %{ given(length=strategy.integers(0, ids.INSTRUMENT_COUNT)) %}
+    return ();
+}
+
+@external
 func test_calculate_pnl{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
-    random: felt
+    length: felt
 ) {
     alloc_locals;
     local instruments;
     %{
-        from random import randint, sample, seed
-        seed(ids.random)
-        length = ids.random % ids.INSTRUMENT_COUNT + 1
-        sample_instruments = sample(range(0, ids.INSTRUMENT_COUNT), length)
+        from random import randint, sample
+        sample_instruments = sample(range(0, ids.INSTRUMENT_COUNT), ids.length)
         ids.instruments = sum([2**x for x in sample_instruments])
 
-        prices = [randint(1, ids.LIMIT) for i in range(length)]
-        amounts = [randint(-ids.LIMIT//prices[i], ids.LIMIT//prices[i]) for i in range(length)]
-        costs = [randint(-ids.LIMIT, ids.LIMIT) for i in range(length)]
-        pnl = sum([prices[i]*amounts[i] - costs[i] for i in range(len(prices))])
+        prices = [randint(1, ids.LIMIT) for i in range(ids.length)]
+        amounts = [randint(-ids.LIMIT//prices[i], ids.LIMIT//prices[i]) for i in range(ids.length)]
+        costs = [randint(-ids.LIMIT, ids.LIMIT) for i in range(ids.length)]
+        pnl = sum([prices[i]*amounts[i] - costs[i] for i in range(ids.length)])
 
         for (i, bit) in enumerate(sample_instruments):
             store(context.self_address, "storage_oracles", [prices[i]], key=[2**bit])
@@ -153,18 +174,22 @@ func test_calculate_pnl{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_ch
 // TEST CALCULATE FEES
 
 @external
+func setup_calculate_fees{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    %{ given(length=strategy.integers(0, ids.INSTRUMENT_COUNT)) %}
+    return ();
+}
+
+@external
 func test_calculate_fees{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
-    random: felt
+    length: felt
 ) {
     alloc_locals;
     local instruments;
     %{
-        from random import randint, sample, seed
-        seed(ids.random)
-        length = ids.random % ids.INSTRUMENT_COUNT + 1
-        sample_instruments = sample(range(0, ids.INSTRUMENT_COUNT), length)
+        from random import randint, sample
+        sample_instruments = sample(range(0, ids.INSTRUMENT_COUNT), ids.length)
         ids.instruments = sum([2**x for x in sample_instruments])
-        fees = [randint(-ids.LIMIT, ids.LIMIT) for i in range(length)]
+        fees = [randint(-ids.LIMIT, ids.LIMIT) for i in range(ids.length)]
         fee = sum(fees)
 
         for (i, bit) in enumerate(sample_instruments):
@@ -182,28 +207,30 @@ func test_calculate_fees{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_c
 // TEST CALCULATE EXIT FEES
 
 @external
+func setup_calculate_exit_fees{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    %{ given(length=strategy.integers(0, ids.INSTRUMENT_COUNT)) %}
+    return ();
+}
+
+@external
 func test_calculate_exit_fees{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
-    random: felt
+    length: felt
 ) {
     alloc_locals;
     local instruments;
     %{
-        from random import randint, sample, seed
-        seed(ids.random)
-        import importlib  
-        utils = importlib.import_module("protostar-test.perpx-v1-exchange.utils")
-        length = ids.random % ids.INSTRUMENT_COUNT + 1
-        sample_instruments = sample(range(0, ids.INSTRUMENT_COUNT), length)
+        from random import randint, sample
+        sample_instruments = sample(range(0, ids.INSTRUMENT_COUNT), ids.length)
         ids.instruments = sum([2**x for x in sample_instruments])
 
-        prices = [randint(1, ids.LIMIT) for i in range(length)]
-        amounts = [randint(-ids.LIMIT//prices[i], ids.LIMIT//prices[i]) for i in range(length)]
-        longs = [randint(1, ids.LIMIT//prices[i]) for i in range(length)]
-        shorts = [randint(1, ids.LIMIT//prices[i]) for i in range(length)]
-        liquidity = [randint(1e6, ids.LIMIT) for i in range(length)]
+        prices = [randint(1, ids.LIMIT) for i in range(ids.length)]
+        amounts = [randint(-ids.LIMIT//prices[i], ids.LIMIT//prices[i]) for i in range(ids.length)]
+        longs = [randint(1, ids.LIMIT//prices[i]) for i in range(ids.length)]
+        shorts = [randint(1, ids.LIMIT//prices[i]) for i in range(ids.length)]
+        liquidity = [randint(1e6, ids.LIMIT) for i in range(ids.length)]
         fee_rate = randint(0, ids.VOLATILITY_FEE_RATE_PRECISION)
 
-        exit_fees = utils.calculate_exit_fees(prices, amounts, longs, shorts, liquidity, fee_rate, ids.VOLATILITY_FEE_RATE_PRECISION)
+        exit_fees = context.calculate_exit_fees(prices, amounts, longs, shorts, liquidity, fee_rate, ids.VOLATILITY_FEE_RATE_PRECISION)
 
         for (i, bit) in enumerate(sample_instruments):
             store(context.self_address, "storage_oracles", [prices[i]], key=[2**bit])
@@ -224,15 +251,19 @@ func test_calculate_exit_fees{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, ra
 // TEST 64x61 TO LIQUIDITY PRECISION
 
 @external
+func setup_64x61_to_liquidity_precision{
+    syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr
+}() {
+    %{ given(amount=strategy.integers(1, ids.MATH64X61_LIMIT)) %}
+    return ();
+}
+
+@external
 func test_64x61_to_liquidity_precision{
     syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr
-}(random: felt) {
+}(amount: felt) {
     alloc_locals;
-    local amount;
-    %{
-        ids.amount = ids.random % ids.MATH64X61_LIMIT + 1
-        new_amount = ids.amount // (ids.MATH64X61_FRACT_PART // ids.LIQUIDITY_PRECISION)
-    %}
+    %{ new_amount = ids.amount // (ids.MATH64X61_FRACT_PART // ids.LIQUIDITY_PRECISION) %}
     local val = _64x61_to_liquidity_precision(x=amount);
     %{ assert ids.val == new_amount, f'precision conversion error, expected {new_amount}, got {ids.val}' %}
     return ();
@@ -241,26 +272,29 @@ func test_64x61_to_liquidity_precision{
 // TEST CALCULATE MARGIN REQUIREMENT
 
 @external
+func setup_calculate_margin_requirement{
+    syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr
+}() {
+    %{ given(length=strategy.integers(1, ids.INSTRUMENT_COUNT)) %}
+    return ();
+}
+
+@external
 func test_calculate_margin_requirement{
     syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr
-}(random: felt) {
+}(length: felt) {
     alloc_locals;
     local instruments;
     %{
-        from random import randint, sample, seed
+        from random import randint, sample
         import numpy as np
-        import math
-        import importlib  
-        utils = importlib.import_module("protostar-test.perpx-v1-exchange.utils")
-        seed(ids.random)
-        length = ids.random % ids.INSTRUMENT_COUNT + 1
-        sample_instruments = sample(range(0, ids.INSTRUMENT_COUNT), length)
+        sample_instruments = sample(range(0, ids.INSTRUMENT_COUNT), ids.length)
         ids.instruments = sum([2**x for x in sample_instruments])
 
-        prices = [randint(1, ids.LIMIT) for i in range(length)]
+        prices = [randint(1, ids.LIMIT) for i in range(ids.length)]
         amounts = [randint(-ids.LIMIT//price, ids.LIMIT//price) for price in prices]
-        volatility = [randint(1, ids.MATH64X61_FRACT_PART//(5*10**4)) for i in range(length)]
-        parameters = [randint(1, 100*ids.MATH64X61_FRACT_PART) for i in range(length)]
+        volatility = [randint(1, ids.MATH64X61_FRACT_PART//(5*10**4)) for i in range(ids.length)]
+        parameters = [randint(1, 100*ids.MATH64X61_FRACT_PART) for i in range(ids.length)]
         for (i, bit) in enumerate(sample_instruments):
             store(context.self_address, "storage_oracles", [prices[i]], key=[2**bit])
             store(context.self_address, "storage_positions", [0, 0, amounts[i]], key=[ids.ACCOUNT, 2**bit])
@@ -277,7 +311,7 @@ func test_calculate_margin_requirement{
         amounts = np.array(amounts)/ids.LIQUIDITY_PRECISION
         size = np.multiply(prices, np.absolute(amounts))
         margin_factor = np.multiply(np.sqrt(volatility), k)
-        margin_requirement = utils.calculate_margin_requirement(volatility, k, size)
+        margin_requirement = context.calculate_margin_requirement(volatility, k, size)
         notional_size = np.sum(size)
         precision = abs(margin_requirement - ids.margin_requirement // 10**6)
         assert precision <= 1e-5 * notional_size, f'margin requirement error, expected precision under {notional_size*1e-5} dollars, got {precision}'
@@ -288,21 +322,25 @@ func test_calculate_margin_requirement{
 // TEST CLOSE ALL POSITIONS
 
 @external
-func test_close_all_positions{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
-    random: felt
+func setup_close_positions{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    %{ given(length=strategy.integers(1, ids.INSTRUMENT_COUNT)) %}
+    return ();
+}
+
+@external
+func test_close_positions{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    length: felt
 ) {
     alloc_locals;
     local instruments;
     %{
-        from random import randint, sample, seed
-        seed(ids.random)
-        length = ids.random % ids.INSTRUMENT_COUNT + 1
-        sample_instruments = sample(range(0, ids.INSTRUMENT_COUNT), length)
+        from random import randint, sample
+        sample_instruments = sample(range(0, ids.INSTRUMENT_COUNT), ids.length)
         ids.instruments = sum([2**x for x in sample_instruments])
 
-        sizes = [randint(-ids.LIMIT, ids.LIMIT) for i in range(length)]
-        fees = [randint(-ids.LIMIT, ids.LIMIT) for i in range(length)]
-        costs = [randint(-ids.LIMIT, ids.LIMIT) for i in range(length)]
+        sizes = [randint(-ids.LIMIT, ids.LIMIT) for i in range(ids.length)]
+        fees = [randint(-ids.LIMIT, ids.LIMIT) for i in range(ids.length)]
+        costs = [randint(-ids.LIMIT, ids.LIMIT) for i in range(ids.length)]
         for (i, bit) in enumerate(sample_instruments):
             store(context.self_address, "storage_positions", [fees[i], costs[i], sizes[i]], key=[ids.ACCOUNT, 2**bit])
     %}
@@ -321,35 +359,39 @@ func test_close_all_positions{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, ra
 // TEST DIVIDE MARGIN
 
 @external
+func setup_divide_margin{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    %{ given(length=strategy.integers(1, ids.INSTRUMENT_COUNT)) %}
+    return ();
+}
+
+@external
 func test_divide_margin{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
-    random: felt
+    length: felt
 ) {
     alloc_locals;
-    local amount;
-    local total;
+    local margin;
+    local total_margin;
     local instruments;
     %{
-        from random import randint, sample, seed
-        seed(ids.random)
-        length = ids.random % ids.INSTRUMENT_COUNT + 1
-        sample_instruments = sample(range(0, ids.INSTRUMENT_COUNT), length)
+        from random import randint, sample
+        sample_instruments = sample(range(0, ids.INSTRUMENT_COUNT), ids.length)
         ids.instruments = sum([2**x for x in sample_instruments])
 
-        liquidity = [randint(1, ids.LIMIT)for i in range(length)]
+        liquidity = [randint(1, ids.LIMIT)for i in range(ids.length)]
         max_liquidity = max(liquidity)
-        amount = randint(-2*max_liquidity, 2*max_liquidity)
-        ids.amount = amount if amount > 0 else PRIME - abs(amount) 
-        ids.total = length * abs(amount)
-        rest = ids.total - sum([abs(amount) if l + amount > 0 else l for l in liquidity])
+        margin = randint(-2*max_liquidity, 2*max_liquidity)
+        ids.margin = context.to_felt(margin)
+        ids.total_margin = ids.length * abs(margin)
+        rest = ids.total_margin - sum([abs(margin) if l + margin > 0 else l for l in liquidity])
         for (i, bit) in enumerate(sample_instruments):
             store(context.self_address, "storage_liquidity", [liquidity[i]], key=[2**bit])
     %}
-    let rest = _divide_margin(total=total, amount=amount, instruments=instruments, mult=1);
+    let rest = _divide_margin(total=total_margin, amount=margin, instruments=instruments, mult=1);
     %{
         rest_signed = context.signed_int(ids.rest)
         assert  rest_signed == rest, f'rest error, expected {rest}, got {rest_signed}'
         for (i, bit) in enumerate(sample_instruments):
-            change = amount if liquidity[i] + amount > 0 else -liquidity[i]
+            change = margin if liquidity[i] + margin > 0 else -liquidity[i]
             liq = context.signed_int(load(context.self_address, "storage_liquidity", "felt", key=[2**bit])[0])
             assert liq == liquidity[i] + change, f'liquidity error, expected {liquidity[i]+change}, got {liq}'
     %}

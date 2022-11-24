@@ -288,8 +288,8 @@ func _divide_margin{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_
     let (q, r) = unsigned_div_rem(instruments, 2);
     if (r == 1) {
         let (liquidity) = storage_liquidity.read(mult);
-        let is_negative = is_nn(liquidity + amount);
-        if (is_negative == 0) {
+        let is_positive = is_nn(liquidity + amount);
+        if (is_positive == 0) {
             storage_liquidity.write(mult, 0);
             let t = _divide_margin(
                 total=total - liquidity, amount=amount, instruments=q, mult=mult * 2

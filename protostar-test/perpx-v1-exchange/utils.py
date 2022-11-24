@@ -95,3 +95,6 @@ def calculate_collateral_change(price, size, cost, fees):
 
 def signed_int(value):
     return value if value <= PRIME/2 else -(PRIME - value)
+
+def to_felt(value):
+    return value if value > 0 else (PRIME - abs(value))
