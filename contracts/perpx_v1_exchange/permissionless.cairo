@@ -28,6 +28,7 @@ from contracts.perpx_v1_exchange.internals import (
 from contracts.perpx_v1_exchange.owners import _close, _remove_collateral
 from contracts.constants.perpx_constants import (
     LIMIT,
+    LIQUIDITY_LIMIT,
     MAX_BOUND,
     MIN_LIQUIDITY,
     MAX_LIQUIDATOR_PAY_OUT,
@@ -228,8 +229,8 @@ func liquidate{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
             // if margin > MAX_LIQUIDATOR_PAY_OUT, distribute remainder to pools
             tempvar remainder = margin - MAX_LIQUIDATOR_PAY_OUT;
             let (q, r) = unsigned_div_rem(remainder, instrument_count);
-            _divide_margin(total=remainder, amount=q, instruments=instruments, mult=1);
             // TODO improve the winnings distribution
+            _divide_margin(total=remainder, amount=q, instruments=instruments, mult=1);
             IERC20.transfer(
                 contract_address=token_address,
                 recipient=caller,
@@ -366,11 +367,12 @@ func add_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_p
     amount: felt, instrument: felt
 ) -> () {
     alloc_locals;
-    local limit = LIMIT;
+    local limit = LIQUIDITY_LIMIT;
+
     _verify_instrument(instrument=instrument);
     with_attr error_message("liquidity increase limited to {limit}") {
         assert [range_check_ptr] = amount - 1;
-        assert [range_check_ptr + 1] = LIMIT - amount;
+        assert [range_check_ptr + 1] = limit - amount;
     }
     let range_check_ptr = range_check_ptr + 2;
 
@@ -385,7 +387,7 @@ func add_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_p
     let (liquidity) = storage_liquidity.read(instrument);
     with_attr error_message("liquidity limited to {limit}") {
         assert [range_check_ptr] = amount + liquidity;
-        assert [range_check_ptr + 1] = LIMIT - amount - liquidity;
+        assert [range_check_ptr + 1] = limit - amount - liquidity;
     }
     let range_check_ptr = range_check_ptr + 2;
 
