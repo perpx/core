@@ -1,7 +1,5 @@
 #!/bin/sh
-# Usage: run sh test.sh with --hardhat [...hardhat-test-files] --protostar [...protostar-test-files] --protostar-complex [...protostar-test-files]
-# complex protostar files run with 500 iterations
-
+# Usage: run sh test.sh with --hardhat [...hardhat-test-files] --protostar [max-fuzzing-examples, ...protostar-test-files]
 
 for var in 1 2; do
 	case "$1" in
@@ -21,23 +19,14 @@ for var in 1 2; do
 			;;
 		--protostar)
 			shift
-			for var in "$@"
-			do
-				if grep -e "hardhat" <<< "$1"; then
-					break
-				fi
-				protostar test "$var"
-				shift
-			done
-			;;
-		--protostar-complex)
+			echo "max-examples: ${1}" > config.yml
 			shift
 			for var in "$@"
 			do
 				if grep -e "hardhat" <<< "$1"; then
 					break
 				fi
-				protostar test --fuzz-max-examples 500 "$var"
+				protostar test "$var"
 				shift
 			done
 			;;

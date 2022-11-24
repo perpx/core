@@ -133,7 +133,6 @@ func test_update_prices_limit_2{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, 
     %{
         start_prank(ids.OWNER)
         store(context.self_address, "storage_is_escaping", [1])
-        store(context.self_address, "storage_is_escaping", [1])
         store(context.self_address, "storage_instrument_count", [ids.INSTRUMENT_COUNT])
         instruments = [2**i for i in [0, 1, 2, 3]]
         ids.instruments = sum(instruments)

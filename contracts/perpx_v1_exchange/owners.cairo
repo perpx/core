@@ -222,8 +222,7 @@ func _update_volatility{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_ch
     let price_return = Math64x61.div(price64x61, prev_price64x61);
 
     let log_price_return = Math64x61.log10(price_return);
-    let exponant = Math64x61.fromFelt(2);
-    let square_log_price_return = Math64x61.pow(log_price_return, exponant);
+    let square_log_price_return = Math64x61.mul(log_price_return, log_price_return);
 
     let (old_volatility) = storage_volatility.read(mult);
     let (params) = storage_margin_parameters.read(mult);
