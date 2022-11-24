@@ -81,7 +81,7 @@ func __setup__{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
     storage_instrument_count.write(INSTRUMENT_COUNT);
     %{
         import importlib  
-        utils = importlib.import_module("protostar-test.perpx-v1-exchange.utils")
+        utils = importlib.import_module("protostar-test.utils")
         context.mul = utils.mul
         context.signed_int = utils.signed_int
         context.calculate_exit_fees = utils.calculate_exit_fees

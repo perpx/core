@@ -43,7 +43,7 @@ func __setup__{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
     let (local address) = get_contract_address();
     %{
         import importlib  
-        utils = importlib.import_module("protostar-test.perpx-v1-exchange.utils")
+        utils = importlib.import_module("protostar-test.utils")
         context.self_address = ids.address 
         context.signed_int = utils.signed_int
     %}
