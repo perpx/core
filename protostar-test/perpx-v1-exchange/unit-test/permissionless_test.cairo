@@ -75,20 +75,33 @@ func __setup__{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
     alloc_locals;
     let (local address) = get_contract_address();
     %{
+        import importlib  
+        utils = importlib.import_module("protostar-test.perpx-v1-exchange.utils")
+        context.calculate_fees = utils.calculate_fees
+        context.signed_int = utils.signed_int
+        context.calculate_exit_fees = utils.calculate_exit_fees
+        context.calculate_margin_requirement = utils.calculate_margin_requirement
         store(ids.address, "ERC20_balances", [ids.RANGE_CHECK_BOUND - 1, 0], key=[ids.ACCOUNT])
         store(ids.address, "storage_token", [ids.address])
         store(ids.address, "storage_instrument_count", [ids.INSTRUMENT_COUNT])
         store(ids.address, "storage_queue_limit", [100])
         for i in range(ids.INSTRUMENT_COUNT):
             store(ids.address, "storage_liquidity", [ids.MIN_LIQUIDITY * 10], key=[2**i])
+            store(ids.address, "storage_shares", [ids.MIN_LIQUIDITY * 1000], key=[2**i])
         context.self_address = ids.address 
-        max_examples(200)
+        max_examples(utils.read_max_examples("./config.yml"))
     %}
 
     return ();
 }
 
 // TEST TRADE
+
+@external
+func setup_trade{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    %{ given(random=strategy.felts()) %}
+    return ();
+}
 
 @external
 func test_trade{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(random: felt) {
@@ -98,8 +111,7 @@ func test_trade{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}
     let (local timestamps: felt*) = alloc();
     local length;
     %{
-        from random import randint, seed, sample
-        seed(ids.random)
+        from random import randint, sample
         ids.length = ids.random % ids.INSTRUMENT_COUNT + 1
         instruments = [2**i for i in sample(range(0, ids.INSTRUMENT_COUNT), ids.length)]
         amounts = [randint(1, ids.LIMIT) for i in range(ids.length)]
@@ -157,14 +169,19 @@ func loop_trade{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}
 // TEST CLOSE
 
 @external
+func setup_close{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    %{ given(random=strategy.felts()) %}
+    return ();
+}
+
+@external
 func test_close{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(random: felt) {
     alloc_locals;
     let (local instruments: felt*) = alloc();
     let (local timestamps: felt*) = alloc();
     local length;
     %{
-        from random import randint, seed, sample
-        seed(ids.random)
+        from random import randint, sample
         ids.length = ids.random % ids.INSTRUMENT_COUNT + 1
         instruments = [2**i for i in sample(range(0, ids.INSTRUMENT_COUNT), ids.length)]
         timestamps = [randint(1, ids.LIMIT) for i in range(ids.length)]
@@ -213,10 +230,7 @@ func test_escape_close{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_che
     // create a fake positions for the user
     %{
         start_prank(ids.ACCOUNT)
-        from random import randint, sample, seed
-        import importlib  
-        utils = importlib.import_module("protostar-test.perpx-v1-exchange.utils")
-        seed(0)
+        from random import randint, sample
         instrument = randint(0, ids.INSTRUMENT_COUNT - 1)
         ids.instrument = 2**instrument
 
@@ -246,11 +260,11 @@ func test_escape_close{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_che
     // escape close
     escape_close(instrument=instrument);
     %{
-        fees_change = utils.calculate_fees(price, -amount, longs, shorts, liquidity, fee_rate, ids.VOLATILITY_FEE_RATE_PRECISION)
+        fees_change = context.calculate_fees(price, -amount, longs, shorts, liquidity, fee_rate, ids.VOLATILITY_FEE_RATE_PRECISION)
         new_cost = cost +  -amount * price
         delta = -new_cost - fees_change - fee
 
-        c = utils.signed_int(load(context.self_address, "storage_collateral", "felt", key=[ids.ACCOUNT])[0])
+        c = context.signed_int(load(context.self_address, "storage_collateral", "felt", key=[ids.ACCOUNT])[0])
         position = load(context.self_address, "storage_positions", "Info", key=[ids.ACCOUNT, 2**instrument])
         new_instruments = load(context.self_address, "storage_user_instruments", "felt", key=[ids.ACCOUNT])[0]
         assert position == [0, 0, 0], f'position error, expected [0, 0, 0], got {position}'
@@ -270,28 +284,31 @@ func test_escape_close{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_che
 // TEST LIQUIDATE
 
 @external
+func setup_liquidate_negative_margin{
+    syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr
+}() {
+    %{ given(collateral=strategy.integers(1, ids.LIMIT)) %}
+    return ();
+}
+
+@external
 func test_liquidate_negative_margin{
     syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr
-}(random: felt) {
+}(collateral: felt) {
     alloc_locals;
     local address;
-    local collateral;
     // prank the approval and the add collateral calls
     %{
         ids.address = context.self_address
         start_prank(ids.ACCOUNT)
-        ids.collateral = ids.random % ids.LIMIT + 1
     %}
     ERC20.approve(spender=address, amount=Uint256(collateral, 0));
     add_collateral(amount=collateral);
 
     // create fake positions for the user
     %{
-        from random import randint, sample, seed
-        import importlib  
+        from random import randint, sample
         import numpy as np
-        utils = importlib.import_module("protostar-test.perpx-v1-exchange.utils")
-        seed(ids.collateral)
         length = ids.collateral % ids.INSTRUMENT_COUNT + 1
         sample_instruments = sample(range(0, ids.INSTRUMENT_COUNT), length)
         instruments = sum([2**i for i in sample_instruments]) 
@@ -310,7 +327,7 @@ func test_liquidate_negative_margin{
 
         # calculate the owners margin
         f = sum(fees)
-        exit_fees = utils.calculate_exit_fees(prices, amounts, longs, shorts, liquidity, fee_rate, ids.VOLATILITY_FEE_RATE_PRECISION)
+        exit_fees = context.calculate_exit_fees(prices, amounts, longs, shorts, liquidity, fee_rate, ids.VOLATILITY_FEE_RATE_PRECISION)
         pnl = sum([p*a-c for (p,a,c) in zip(prices, amounts, costs)])
         margin = ids.collateral + pnl - f - exit_fees
 
@@ -320,7 +337,7 @@ func test_liquidate_negative_margin{
         prices_scaled = np.array(prices)/ids.LIQUIDITY_PRECISION
         amounts_scaled = np.array(amounts)/ids.LIQUIDITY_PRECISION
         size = np.multiply(prices_scaled, np.absolute(amounts_scaled))
-        min_margin = utils.calculate_margin_requirement(v_scaled, k_scaled, size) * ids.LIQUIDITY_PRECISION
+        min_margin = context.calculate_margin_requirement(v_scaled, k_scaled, size) * ids.LIQUIDITY_PRECISION
         assume(margin < 0 and margin < min_margin)
 
         for (i, bit) in enumerate(sample_instruments):
@@ -340,11 +357,19 @@ func test_liquidate_negative_margin{
         liquidity_change = margin//length
         for (i, bit) in enumerate(sample_instruments):
             position = load(context.self_address, "storage_positions", "Info", key=[ids.ACCOUNT, 2**bit])
-            new_liquidity = utils.signed_int(load(context.self_address, "storage_liquidity", "felt", key=[2**bit])[0])
+            new_liquidity = context.signed_int(load(context.self_address, "storage_liquidity", "felt", key=[2**bit])[0])
             assert position == [0, 0, 0], f'position error, expected [0, 0, 0], got {position}'
             liq = liquidity[i] + liquidity_change if liquidity[i] + liquidity_change > 0 else 0
             assert liq == new_liquidity, f'liquidity error, expected {liq}, got {new_liquidity}'
     %}
+    return ();
+}
+
+@external
+func setup_liquidate_positive_min_payout{
+    syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr
+}() {
+    %{ given(random=strategy.felts()) %}
     return ();
 }
 
@@ -358,11 +383,8 @@ func test_liquidate_positive_min_payout{
 
     // create fake positions for the user
     %{
-        from random import randint, sample, seed
-        import importlib  
+        from random import randint, sample
         import numpy as np
-        utils = importlib.import_module("protostar-test.perpx-v1-exchange.utils")
-        seed(ids.random)
         length = ids.random % ids.INSTRUMENT_COUNT + 1
         sample_instruments = sample(range(0, ids.INSTRUMENT_COUNT), length)
         instruments = sum([2**i for i in sample_instruments]) 
@@ -382,7 +404,7 @@ func test_liquidate_positive_min_payout{
 
         # calculate the owners margin
         f = sum(fees)
-        exit_fees = utils.calculate_exit_fees(prices, amounts, longs, shorts, liquidity, fee_rate, ids.VOLATILITY_FEE_RATE_PRECISION)
+        exit_fees = context.calculate_exit_fees(prices, amounts, longs, shorts, liquidity, fee_rate, ids.VOLATILITY_FEE_RATE_PRECISION)
         pnl = sum([p*a-c for (p,a,c) in zip(prices, amounts, costs)])
         margin = pnl - f - exit_fees
 
@@ -392,7 +414,7 @@ func test_liquidate_positive_min_payout{
         prices_scaled = np.array(prices)/ids.LIQUIDITY_PRECISION
         amounts_scaled = np.array(amounts)/ids.LIQUIDITY_PRECISION
         size = np.multiply(prices_scaled, np.absolute(amounts_scaled))
-        min_margin = utils.calculate_margin_requirement(v_scaled, k_scaled, size) * ids.LIQUIDITY_PRECISION
+        min_margin = context.calculate_margin_requirement(v_scaled, k_scaled, size) * ids.LIQUIDITY_PRECISION
     %}
     // prank the approval and the add collateral calls
     %{
@@ -426,10 +448,18 @@ func test_liquidate_positive_min_payout{
         liquidity_change = (ids.MIN_LIQUIDATOR_PAY_OUT - margin)//length
         for (i, bit) in enumerate(sample_instruments):
             position = load(context.self_address, "storage_positions", "Info", key=[ids.ACCOUNT, 2**bit])
-            new_liquidity = utils.signed_int(load(context.self_address, "storage_liquidity", "felt", key=[2**bit])[0])
+            new_liquidity = context.signed_int(load(context.self_address, "storage_liquidity", "felt", key=[2**bit])[0])
             assert position == [0, 0, 0], f'position error, expected [0, 0, 0], got {position}'
             assert liquidity[i] - liquidity_change == new_liquidity, f'liquidity error, expected {liquidity[i] + liquidity_change}, got {new_liquidity}'
     %}
+    return ();
+}
+
+@external
+func setup_liquidate_positive_min_max_payout{
+    syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr
+}() {
+    %{ given(random=strategy.felts()) %}
     return ();
 }
 
@@ -443,11 +473,8 @@ func test_liquidate_positive_min_max_payout{
 
     // create fake positions for the user
     %{
-        from random import randint, sample, seed
-        import importlib  
+        from random import randint, sample
         import numpy as np
-        utils = importlib.import_module("protostar-test.perpx-v1-exchange.utils")
-        seed(ids.random)
         length = ids.random % ids.INSTRUMENT_COUNT + 1
         sample_instruments = sample(range(0, ids.INSTRUMENT_COUNT), length)
         instruments = sum([2**i for i in sample_instruments]) 
@@ -468,7 +495,7 @@ func test_liquidate_positive_min_max_payout{
 
         # calculate the owners margin
         f = sum(fees)
-        exit_fees = utils.calculate_exit_fees(prices, amounts, longs, shorts, liquidity, fee_rate, ids.VOLATILITY_FEE_RATE_PRECISION)
+        exit_fees = context.calculate_exit_fees(prices, amounts, longs, shorts, liquidity, fee_rate, ids.VOLATILITY_FEE_RATE_PRECISION)
         pnl = sum([p*a-c for (p,a,c) in zip(prices, amounts, costs)])
         margin = pnl - f - exit_fees
 
@@ -478,7 +505,7 @@ func test_liquidate_positive_min_max_payout{
         prices_scaled = np.array(prices)/ids.LIQUIDITY_PRECISION
         amounts_scaled = np.array(amounts)/ids.LIQUIDITY_PRECISION
         size = np.multiply(prices_scaled, np.absolute(amounts_scaled))
-        min_margin = utils.calculate_margin_requirement(v_scaled, k_scaled, size) * ids.LIQUIDITY_PRECISION
+        min_margin = context.calculate_margin_requirement(v_scaled, k_scaled, size) * ids.LIQUIDITY_PRECISION
     %}
     // prank the approval and the add collateral calls
     %{
@@ -510,10 +537,18 @@ func test_liquidate_positive_min_max_payout{
     %{
         for (i, bit) in enumerate(sample_instruments):
             position = load(context.self_address, "storage_positions", "Info", key=[ids.ACCOUNT, 2**bit])
-            new_liquidity = utils.signed_int(load(context.self_address, "storage_liquidity", "felt", key=[2**bit])[0])
+            new_liquidity = context.signed_int(load(context.self_address, "storage_liquidity", "felt", key=[2**bit])[0])
             assert position == [0, 0, 0], f'position error, expected [0, 0, 0], got {position}'
             assert liquidity[i] == new_liquidity, f'liquidity error, expected {liquidity[i]}, got {new_liquidity}'
     %}
+    return ();
+}
+
+@external
+func setup_liquidate_positive_max_payout{
+    syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr
+}() {
+    %{ given(random=strategy.felts()) %}
     return ();
 }
 
@@ -527,11 +562,8 @@ func test_liquidate_positive_max_payout{
 
     // create fake positions for the user
     %{
-        from random import randint, sample, seed
-        import importlib  
+        from random import randint, sample
         import numpy as np
-        utils = importlib.import_module("protostar-test.perpx-v1-exchange.utils")
-        seed(ids.random)
         length = ids.random % ids.INSTRUMENT_COUNT + 1
         sample_instruments = sample(range(0, ids.INSTRUMENT_COUNT), length)
         instruments = sum([2**i for i in sample_instruments]) 
@@ -551,7 +583,7 @@ func test_liquidate_positive_max_payout{
 
         # calculate the owners margin
         f = sum(fees)
-        exit_fees = utils.calculate_exit_fees(prices, amounts, longs, shorts, liquidity, fee_rate, ids.VOLATILITY_FEE_RATE_PRECISION)
+        exit_fees = context.calculate_exit_fees(prices, amounts, longs, shorts, liquidity, fee_rate, ids.VOLATILITY_FEE_RATE_PRECISION)
         pnl = sum([p*a-c for (p,a,c) in zip(prices, amounts, costs)])
         margin = pnl - f - exit_fees
 
@@ -561,7 +593,7 @@ func test_liquidate_positive_max_payout{
         prices_scaled = np.array(prices)/ids.LIQUIDITY_PRECISION
         amounts_scaled = np.array(amounts)/ids.LIQUIDITY_PRECISION
         size = np.multiply(prices_scaled, np.absolute(amounts_scaled))
-        min_margin = utils.calculate_margin_requirement(v_scaled, k_scaled, size) * ids.LIQUIDITY_PRECISION
+        min_margin = context.calculate_margin_requirement(v_scaled, k_scaled, size) * ids.LIQUIDITY_PRECISION
     %}
     // prank the approval and the add collateral calls
     %{
@@ -594,7 +626,7 @@ func test_liquidate_positive_max_payout{
         liquidity_change = (margin - ids.MAX_LIQUIDATOR_PAY_OUT)//length
         for (i, bit) in enumerate(sample_instruments):
             position = load(context.self_address, "storage_positions", "Info", key=[ids.ACCOUNT, 2**bit])
-            new_liquidity = utils.signed_int(load(context.self_address, "storage_liquidity", "felt", key=[2**bit])[0])
+            new_liquidity = context.signed_int(load(context.self_address, "storage_liquidity", "felt", key=[2**bit])[0])
             assert position == [0, 0, 0], f'position error, expected [0, 0, 0], got {position}'
             assert liquidity[i] + liquidity_change == new_liquidity, f'liquidity error, expected {liquidity[i] + liquidity_change}, got {new_liquidity}'
     %}
@@ -604,18 +636,22 @@ func test_liquidate_positive_max_payout{
 // TEST ADD COLLATERAL
 
 @external
+func setup_add_collateral{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    %{ given(amount=strategy.integers(1, ids.LIMIT)) %}
+    return ();
+}
+
+@external
 func test_add_collateral{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
-    random: felt
+    amount: felt
 ) {
     alloc_locals;
     local address;
-    local amount;
-    %{ ids.address = context.self_address %}
 
     // prank the approval and the add collateral calls
     %{
+        ids.address = context.self_address
         stop_prank_callable = start_prank(ids.ACCOUNT)
-        ids.amount = ids.random % ids.LIMIT + 1
     %}
     ERC20.approve(spender=address, amount=Uint256(amount, 0));
     add_collateral(amount=amount);
@@ -632,6 +668,14 @@ func test_add_collateral{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_c
     return ();
 }
 
+// TEST REMOVE COLLATERAL
+
+@external
+func setup_remove_collateral{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    %{ given(random=strategy.felts()) %}
+    return ();
+}
+
 @external
 func test_remove_collateral{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
     random: felt
@@ -641,9 +685,8 @@ func test_remove_collateral{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, rang
     let (local timestamps: felt*) = alloc();
     local length;
     %{
+        from random import randint
         store(context.self_address, "storage_user_instruments", [10], key=[ids.ACCOUNT])
-        from random import randint, seed
-        seed(ids.random)
         ids.length = ids.random % 10 + 1
         amounts = [randint(1, ids.LIMIT) for i in range(ids.length)]
         timestamps = [randint(1, ids.LIMIT) for i in range(ids.length)]
@@ -677,19 +720,25 @@ func loop_remove{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr
 }
 
 @external
+func setup_remove_collateral_no_position{
+    syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr
+}() {
+    %{ given(provide_amount=strategy.integers(1, ids.LIMIT), remove_random=strategy.felts()) %}
+    return ();
+}
+
+@external
 func test_remove_collateral_no_position{
     syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr
-}(provide_random: felt, remove_random: felt) {
+}(provide_amount: felt, remove_random: felt) {
     alloc_locals;
     local address;
-    local provide_amount;
     local remove_amount;
-    %{ ids.address = context.self_address %}
 
     // prank the approval and the add collateral calls
     %{
+        ids.address = context.self_address
         stop_prank_callable = start_prank(ids.ACCOUNT)
-        ids.provide_amount = ids.provide_random % ids.LIMIT + 1
         ids.remove_amount = ids.remove_random % ids.provide_amount + 1
     %}
     ERC20.approve(spender=address, amount=Uint256(provide_amount, 0));
@@ -709,19 +758,27 @@ func test_remove_collateral_no_position{
 // TEST ADD LIQUIDITY
 
 @external
+func setup_add_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    %{
+        limit = (ids.LIMIT//100 - ids.MIN_LIQUIDITY*10)
+        given(amount_1=strategy.integers(1, limit), 
+        random=strategy.felts())
+    %}
+    return ();
+}
+
+@external
 func test_add_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
-    random: felt
+    amount_1: felt, random: felt
 ) {
     alloc_locals;
     local address;
-    local amount_1;
     local amount_2;
-    %{ ids.address = context.self_address %}
 
     // prank the approval and the add liquidity calls
     %{
-        ids.amount_1 = ids.random % (ids.LIMIT//100) + 1
-        ids.amount_2 = ids.random % (ids.LIMIT//100 - ids.amount_1) + 1
+        ids.address = context.self_address
+        ids.amount_2 = (ids.LIMIT//100 - ids.MIN_LIQUIDITY*10) - ids.amount_1
         start_prank(ids.ACCOUNT)
     %}
     ERC20.approve(spender=address, amount=Uint256(2 * LIMIT, 0));
@@ -742,9 +799,9 @@ func test_add_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_ch
     // add liquidity
     add_liquidity(amount=amount_2, instrument=INSTRUMENT);
     %{
+        liq = ids.MIN_LIQUIDITY * 10 + ids.amount_1
         stake = load(context.self_address, "storage_user_stake", "Stake", key=[ids.ACCOUNT, ids.INSTRUMENT])
-
-        assert stake[0] == user_stake[0] + ids.amount_2*user_stake[0]//ids.amount_1, f'user stake shares error, expected {user_stake[0] + ids.amount_2*user_stake[0]//ids.amount_1}, got {stake[0]}'
+        assert stake[0] == user_stake[0] + ids.amount_2*user_stake[0]//liq, f'user stake shares error, expected {user_stake[0] + ids.amount_2*user_stake[0]//liq}, got {stake[0]}'
     %}
 
     return ();
@@ -753,19 +810,23 @@ func test_add_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_ch
 // TEST REMOVE LIQUIDITY
 
 @external
+func setup_remove_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    %{ given(provide_amount=strategy.integers(1, ids.LIMIT//100), remove_random=strategy.felts()) %}
+    return ();
+}
+
+@external
 func test_remove_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
-    provide_random: felt, remove_random: felt
+    provide_amount: felt, remove_random: felt
 ) {
     alloc_locals;
     local address;
-    local provide_amount;
     local remove_amount;
-    %{ ids.address = context.self_address %}
 
     // prank the approval and the add liquidity calls
     %{
-        stop_prank_callable = start_prank(ids.ACCOUNT)
-        ids.provide_amount = ids.provide_random % (ids.LIMIT//100) + 1
+        ids.address = context.self_address
+        start_prank(ids.ACCOUNT)
         ids.remove_amount = ids.remove_random % ids.provide_amount + 1
     %}
     ERC20.approve(spender=address, amount=Uint256(provide_amount, 0));

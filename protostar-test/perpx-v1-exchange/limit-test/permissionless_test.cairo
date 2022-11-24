@@ -17,6 +17,7 @@ from contracts.constants.perpx_constants import (
     LIQUIDITY_PRECISION,
     VOLATILITY_FEE_RATE_PRECISION,
     MIN_LIQUIDITY,
+    LIQUIDITY_LIMIT,
 )
 from src.openzeppelin.token.erc20.library import ERC20
 from contracts.constants.perpx_constants import RANGE_CHECK_BOUND, LIMIT
@@ -71,6 +72,7 @@ func __setup__{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
         store(ids.address, "storage_token", [ids.address])
         store(ids.address, "storage_instrument_count", [ids.INSTRUMENT_COUNT])
         store(ids.address, "storage_queue_limit", [100])
+        store(ids.address, "storage_liquidity", [ids.MIN_LIQUIDITY+1], key=[1])
         context.self_address = ids.address
     %}
 
@@ -86,15 +88,15 @@ func test_add_liquidity_limit_1{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, 
     local amount;
     %{ ids.address = context.self_address %}
 
-    // test case: amount = LIMIT//100 + 1
+    // test case: amount = LIQUIDITY_LIMIT + 1
     // prank the approval and the add liquidity calls
     %{
-        ids.amount = ids.LIMIT//100+1
+        ids.amount = ids.LIQUIDITY_LIMIT + 1 
         start_prank(ids.ACCOUNT)
     %}
     ERC20.approve(spender=address, amount=Uint256(2 * LIMIT + 1, 0));
 
-    %{ expect_revert(error_message=f'shares limited to {ids.LIMIT}') %}
+    %{ expect_revert(error_message=f'liquidity increase limited to {ids.LIQUIDITY_LIMIT}') %}
     add_liquidity(amount=amount, instrument=INSTRUMENT);
     return ();
 }
@@ -119,6 +121,26 @@ func test_add_liquidity_limit_2{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, 
     return ();
 }
 
+@external
+func test_add_liquidity_limit_3{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    alloc_locals;
+    local address;
+    local amount;
+    %{ ids.address = context.self_address %}
+
+    // test case: amount = LIQUIDITY_LIMIT - initial liquidity + 1
+    // prank the approval and the add liquidity calls
+    %{
+        ids.amount = ids.LIQUIDITY_LIMIT - ids.MIN_LIQUIDITY
+        start_prank(ids.ACCOUNT)
+    %}
+    ERC20.approve(spender=address, amount=Uint256(2 * LIMIT + 1, 0));
+
+    %{ expect_revert(error_message=f'liquidity limited to {ids.LIQUIDITY_LIMIT}') %}
+    add_liquidity(amount=amount, instrument=INSTRUMENT);
+    return ();
+}
+
 // TEST REMOVE LIQUIDITY
 
 @external
@@ -129,10 +151,10 @@ func test_remove_liquidity_limit_1{syscall_ptr: felt*, pedersen_ptr: HashBuiltin
     local amount;
     %{ ids.address = context.self_address %}
 
-    // test case: amount = LIMIT//100
+    // test case: amount = LIMIT//100 - initial liquidity
     // prank the approval and the add liquidity calls
     %{
-        ids.amount = ids.LIMIT//100
+        ids.amount = ids.LIQUIDITY_LIMIT - (ids.MIN_LIQUIDITY+1)
         stop_prank_callable = start_prank(ids.ACCOUNT)
     %}
     ERC20.approve(spender=address, amount=Uint256(2 * LIMIT, 0));
