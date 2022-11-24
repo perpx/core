@@ -1,6 +1,8 @@
 from starkware.python.math_utils import isqrt
 import numpy as np
 import math
+import yaml
+from yaml.loader import SafeLoader
 
 FRACT_PART = 2**61
 LIQUIDITY_PRECISION = 10**6
@@ -88,7 +90,7 @@ def calculate_longs_shorts_change(amount, size):
             if abs(amount) < size:
                 return amount, 0
             else:
-                return -size, size + amount
+                return -size, abs(size + amount)
 
 def calculate_collateral_change(price, size, cost, fees):
     return -(price*(-size) + cost) - fees
@@ -98,3 +100,8 @@ def signed_int(value):
 
 def to_felt(value):
     return value if value > 0 else (PRIME - abs(value))
+
+def read_max_examples(path):
+    with open(path, 'r') as f:
+       data = yaml.load(f, Loader=SafeLoader) 
+    return data["max-examples"]

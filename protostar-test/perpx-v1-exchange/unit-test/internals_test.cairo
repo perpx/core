@@ -51,7 +51,7 @@ func __setup__{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
         context.to_felt = utils.to_felt
         context.self_address = ids.address
         store(context.self_address, "storage_instrument_count", [ids.INSTRUMENT_COUNT])
-        max_examples(200)
+        max_examples(utils.read_max_examples("./config.yml"))
     %}
     return ();
 }
