@@ -229,8 +229,8 @@ func liquidate{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
             // if margin > MAX_LIQUIDATOR_PAY_OUT, distribute remainder to pools
             tempvar remainder = margin - MAX_LIQUIDATOR_PAY_OUT;
             let (q, r) = unsigned_div_rem(remainder, instrument_count);
-            _divide_margin(total=remainder, amount=q, instruments=instruments, mult=1);
             // TODO improve the winnings distribution
+            _divide_margin(total=remainder, amount=q, instruments=instruments, mult=1);
             IERC20.transfer(
                 contract_address=token_address,
                 recipient=caller,

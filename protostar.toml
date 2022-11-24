@@ -1,28 +1,16 @@
-["protostar.config"]
-protostar_version = "0.4.2"
-
-["protostar.project"]
-libs_path = "lib"
-
-["protostar.shared_command_configs"]
+[project]
+protostar-version = "0.7.0"
+lib-path = "lib"
 cairo-path = ["./lib/cairo_contracts_git/src", "./lib/cairo_math_64x61_git/contracts"]
 
-["protostar.build"]
+[contracts]
+exchange = ["contracts/perpx_v1_exchange.cairo"]
+erc20 = ["contracts/test/erc20.cairo"]
+
+[build]
 compiled-contracts-dir = "./starknet-artifacts/protostar"
 
-["protostar.contracts"]
-exchange=[
-    "./contracts/perpx_v1_exchange.cairo",
-]
-erc20=[
-    "./contracts/test/erc20.cairo",
-]
+[test]
+cairo-path = ["./protostar-test/", "./lib/cairo_contracts_git/src"]
+ignore = ["starknet-artifacts"]
 
-["protostar.test"]
-cairo-path = [
-    "./protostar-test/",
-    "./lib/cairo_contracts_git/src"
-]
-ignore = [
-    "starknet-artifacts"
-]
