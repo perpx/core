@@ -105,8 +105,8 @@ export async function saveContractInformations(path: string, address: string) {
     }
     results['operations_count'] = (
         await callContract(path, address, 'view_operations_count', [])
-    )[0]
-    results['price'] = (await callContract(path, address, 'view_price', [2]))[0]
+    )[0].toString()
+    results['price'] = (await callContract(path, address, 'view_price', [2]))[0].toString()
     let open_interests = await callContract(
         path,
         address,
@@ -114,12 +114,12 @@ export async function saveContractInformations(path: string, address: string) {
         [2]
     )
     results['open_interests'] = {
-        longs: open_interests[0],
-        shorts: open_interests[1],
+        longs: open_interests[0].toString(),
+        shorts: open_interests[1].toString(),
     }
     results['liquidity'] = (
         await callContract(path, address, 'view_liquidity', [2])
-    )[0]
+    )[0].toString()
     output.push(results)
     fs.writeFileSync(
         './test/integration/data/output.json',
