@@ -29,11 +29,13 @@ func __setup__{syscall_ptr: felt*}() {
     alloc_locals;
     let (address) = get_contract_address();
     %{
-        max_examples(200)
+        import importlib  
+        utils = importlib.import_module("protostar-test.utils")
         context.self_address = ids.address
         store(ids.address, "storage_liquidity", [ids.INITIAL_LIQUIDITY], key=[ids.INSTRUMENT])
         store(ids.address, "storage_shares", [ids.INITIAL_SHARES], key=[ids.INSTRUMENT])
         store(ids.address, "storage_user_stake", [ids.INITIAL_USER_LIQUIDITY, ids.INITIAL_USER_SHARES, 0], key=[ids.OWNER, ids.INSTRUMENT])
+        max_examples(utils.read_max_examples("./config.yml"))
     %}
 
     return ();
@@ -42,12 +44,15 @@ func __setup__{syscall_ptr: felt*}() {
 // TEST PROVIDE LIQUIDITY
 
 @external
+func setup_provide_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    %{ given(amount=strategy.integers(1, ids.LIMIT//100)) %}
+    return ();
+}
+
+@external
 func test_provide_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
-    random: felt
+    amount: felt
 ) {
-    alloc_locals;
-    local amount;
-    %{ ids.amount = ids.random % (ids.LIMIT//100)+ 1 %}
     // retrieve liquidity, shares and user_shares
     %{
         pre_liquidity = load(context.self_address, "storage_liquidity", "felt", key=[ids.INSTRUMENT])[0]
@@ -75,17 +80,20 @@ func test_provide_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, rang
 // TEST WITHDRAW LIQUIDITY
 
 @external
+func setup_withdraw_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    %{ given(amount=strategy.integers(1, ids.INITIAL_USER_LIQUIDITY)) %}
+    return ();
+}
+
+@external
 func test_withdraw_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
-    random: felt
+    amount: felt
 ) {
-    alloc_locals;
-    local amount;
-    %{ ids.amount = ids.random % ids.INITIAL_USER_LIQUIDITY + 1 %}
     Vault.provide_liquidity(amount=LIQUIDITY_INCREASE, owner=OWNER, instrument=INSTRUMENT);
     // retrieve liquidity, shares and user_shares
     %{
         #modify the liquidity
-        liquidity = load(context.self_address, "storage_liquidity", "felt", key=[ids.INSTRUMENT])[0] + ids.random % ids.LIMIT + 1
+        liquidity = load(context.self_address, "storage_liquidity", "felt", key=[ids.INSTRUMENT])[0] + ids.amount
         store(context.self_address, "storage_liquidity", [liquidity], key=[ids.INSTRUMENT])
         pre_shares = load(context.self_address, "storage_shares", "felt", key=[ids.INSTRUMENT])[0]
         stake = load(context.self_address, "storage_user_stake", "Stake", key=[ids.OWNER, ids.INSTRUMENT])
