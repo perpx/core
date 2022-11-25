@@ -790,6 +790,7 @@ func test_add_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_ch
         user_stake = load(context.self_address, "storage_user_stake", "Stake", key=[ids.ACCOUNT, ids.INSTRUMENT])
         account_balance = load(context.self_address, "ERC20_balances", "Uint256", key=[ids.ACCOUNT])
         exchange_balance = load(context.self_address, "ERC20_balances", "Uint256", key=[ids.address])
+        shares = load(context.self_address, "storage_shares", "felt", key=[ids.INSTRUMENT])[0]
 
         assert user_stake[0] == ids.amount_1*100, f'user stake shares error, expected {ids.amount_1 * 100}, got {user_stake[0]}'
         assert account_balance == [ids.RANGE_CHECK_BOUND-1-ids.amount_1, 0], f'account balance error, expected [{ids.RANGE_CHECK_BOUND-1-ids.amount_1}, 0] got {account_balance}'
@@ -801,7 +802,7 @@ func test_add_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_ch
     %{
         liq = ids.MIN_LIQUIDITY * 10 + ids.amount_1
         stake = load(context.self_address, "storage_user_stake", "Stake", key=[ids.ACCOUNT, ids.INSTRUMENT])
-        assert stake[0] == user_stake[0] + ids.amount_2*user_stake[0]//liq, f'user stake shares error, expected {user_stake[0] + ids.amount_2*user_stake[0]//liq}, got {stake[0]}'
+        assert stake[0] == user_stake[0] + ids.amount_2*shares//liq, f'user stake shares error, expected {user_stake[0] + ids.amount_2*shares//liq}, got {stake[0]}'
     %}
 
     return ();
