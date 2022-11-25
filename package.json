@@ -23,5 +23,10 @@
     "tabWidth": 4,
     "semi": false,
     "singleQuote": true
+  },
+  "dependencies": {
+    "dotenv": "^16.0.3",
+    "starknet": "^4.9.0",
+    "tslog": "^3.3.4"
   }
 }

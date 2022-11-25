@@ -35,27 +35,3 @@ func view_shorts{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr
     let (_shorts) = shorts(instrument);
     return (shorts=_shorts);
 }
-
-@view
-func view_shares{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
-    instrument: felt
-) -> (shares: felt) {
-    let (shares) = Vault.view_shares(instrument);
-    return (shares=shares);
-}
-
-@view
-func view_user_stake{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
-    owner: felt, instrument: felt
-) -> (stake: Stake) {
-    let (stake) = Vault.view_user_stake(owner, instrument);
-    return (stake=stake);
-}
-
-@view
-func view_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
-    instrument: felt
-) -> (liquidity: felt) {
-    let (liquidity) = Vault.view_liquidity(instrument);
-    return (liquidity=liquidity);
-}
