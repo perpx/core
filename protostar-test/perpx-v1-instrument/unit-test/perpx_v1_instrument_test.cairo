@@ -34,9 +34,7 @@ func __setup__{syscall_ptr: felt*}() {
     let (address) = get_contract_address();
     %{
         import importlib  
-        max_examples(200) 
-
-        utils = importlib.import_module("protostar-test.perpx-v1-instrument.utils")
+        utils = importlib.import_module("protostar-test.utils")
         context.signed_int = utils.signed_int
         context.self_address = ids.address
         store(ids.address, "storage_liquidity", [ids.INITIAL_LIQUIDITY], key=[ids.INSTRUMENT])
@@ -44,6 +42,7 @@ func __setup__{syscall_ptr: felt*}() {
         store(ids.address, "storage_user_stake", [ids.INITIAL_USER_SHARES, 0], key=[ids.OWNER, ids.INSTRUMENT])
         store(ids.address, "storage_longs", [ids.INITIAL_LONGS], key=[ids.INSTRUMENT])
         store(ids.address, "storage_shorts", [ids.INITIAL_SHORTS], key=[ids.INSTRUMENT])
+        max_examples(utils.read_max_examples("./config.yml"))
     %}
     return ();
 }
@@ -99,13 +98,15 @@ func test_update_liquidity_positive{
 }
 
 @external
-func test_update_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
-    random: felt
-) {
-    alloc_locals;
-    local amount;
-    %{ ids.amount = ids.random % (ids.LIMIT//100) + 1 if ids.random < PRIME/2 else PRIME - ids.random % ids.INITIAL_USER_LIQUIDITY - 1 %}
+func setup_update_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    %{ given(amount=strategy.integers(-ids.INITIAL_USER_LIQUIDITY, ids.LIMIT//100).filter(lambda x: x != 0)) %}
+    return ();
+}
 
+@external
+func test_update_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    amount: felt
+) {
     update_liquidity(amount=amount, owner=OWNER, instrument=INSTRUMENT);
 
     %{
@@ -128,12 +129,15 @@ func test_update_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range
 // TEST UPDATE LONGS
 
 @external
+func setup_update_longs{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    %{ given(amount=strategy.integers(-ids.INITIAL_LONGS, ids.RANGE_CHECK_BOUND - ids.INITIAL_LONGS).filter(lambda x: x != 0)) %}
+    return ();
+}
+
+@external
 func test_update_longs{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
-    random: felt
+    amount: felt
 ) {
-    alloc_locals;
-    local amount;
-    %{ ids.amount = ids.random % (ids.RANGE_CHECK_BOUND - ids.INITIAL_LONGS) + 1 if ids.random < PRIME / 2 else PRIME - ids.random % ids.INITIAL_LONGS - 1 %}
     update_long_short(amount=amount, instrument=INSTRUMENT, is_long=1);
 
     %{
@@ -147,12 +151,15 @@ func test_update_longs{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_che
 // TEST UPDATE SHORTS
 
 @external
+func setup_update_shorts{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
+    %{ given(amount=strategy.integers(-ids.INITIAL_SHORTS, ids.RANGE_CHECK_BOUND - ids.INITIAL_SHORTS).filter(lambda x: x != 0)) %}
+    return ();
+}
+
+@external
 func test_update_shorts{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
-    random: felt
+    amount: felt
 ) {
-    alloc_locals;
-    local amount;
-    %{ ids.amount = ids.random % (ids.RANGE_CHECK_BOUND - ids.INITIAL_LONGS) + 1 if ids.random < PRIME / 2 else PRIME - ids.random % ids.INITIAL_LONGS - 1 %}
     update_long_short(amount=amount, instrument=INSTRUMENT, is_long=0);
 
     %{
