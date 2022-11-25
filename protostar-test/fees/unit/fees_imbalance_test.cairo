@@ -3,7 +3,6 @@
 from starkware.cairo.common.cairo_builtins import HashBuiltin
 from contracts.library.fees import Fees
 from contracts.constants.perpx_constants import RANGE_CHECK_BOUND, LIMIT, MAX_BOUND, MIN_LIQUIDITY
-from helpers.helpers import setup_helpers
 
 //
 // Setup
@@ -11,8 +10,12 @@ from helpers.helpers import setup_helpers
 
 @external
 func __setup__() {
-    setup_helpers();
-    %{ max_examples(200) %}
+    %{
+        import importlib  
+        utils = importlib.import_module("protostar-test.utils")
+        context.signed_int = utils.signed_int
+        max_examples(utils.read_max_examples("./config.yml"))
+    %}
     return ();
 }
 
@@ -21,15 +24,30 @@ func __setup__() {
 //
 
 @external
+func setup_liquidity_compute_imbalance_fees{
+    syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr
+}() {
+    %{
+        given(
+            amount=strategy.integers(-ids.LIMIT, ids.LIMIT).filter(lambda x: x != 0),
+            long=strategy.integers(0, ids.LIMIT),
+            short=strategy.integers(0,ids.LIMIT),
+        )
+    %}
+    return ();
+}
+
+@external
 func test_liquidity_compute_imbalance_fees{
     syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr
-}(price: felt, amount: felt, long: felt, short: felt) {
+}(amount: felt, long: felt, short: felt) {
     alloc_locals;
     local liquidity;
+    local price;
     %{
-        # assumed limits when computing the fees
-        assume(ids.short < ids.LIMIT and ids.long < ids.LIMIT and abs(ids.price*ids.amount) < ids.LIMIT)
         ids.liquidity = ids.MIN_LIQUIDITY
+        amount = context.signed_int(ids.amount)
+        ids.price = ids.LIMIT // abs(amount)
     %}
 
     // compute imbalance fees
@@ -38,7 +56,6 @@ func test_liquidity_compute_imbalance_fees{
     );
 
     %{
-        amount = context.signed_int(ids.amount)
         imbalance_fees = ids.price * amount * (2 * ids.long + ids.price * amount - 2 * ids.short) // (2 * ids.liquidity)
 
         imbalance = context.signed_int(ids.imbalance_fees)
@@ -48,21 +65,33 @@ func test_liquidity_compute_imbalance_fees{
 }
 
 @external
+func setup_longs_shorts_compute_imbalance_fees{
+    syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr
+}() {
+    %{
+        given(
+            amount=strategy.integers(-ids.LIMIT, ids.LIMIT).filter(lambda x: x != 0),
+            liquidity=strategy.integers(ids.MIN_LIQUIDITY, ids.LIMIT),
+        )
+    %}
+    return ();
+}
+
+@external
 func test_longs_shorts_compute_imbalance_fees{
     syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr
-}(price: felt, amount: felt, liq: felt) {
+}(amount: felt, liquidity: felt) {
     alloc_locals;
-    local liquidity;
+    local price;
     %{
-        assume(abs(ids.price*ids.amount) < ids.LIMIT)
-        ids.liquidity = ids.liq % (ids.LIMIT - ids.MIN_LIQUIDITY) + ids.MIN_LIQUIDITY
+        amount = context.signed_int(ids.amount)
+        ids.price = ids.LIMIT // abs(amount)
     %}
     // compute imbalance fees
     let (local imbalance_fees) = Fees.compute_imbalance_fee(
         price=price, amount=amount, long=LIMIT, short=0, liquidity=liquidity
     );
     %{
-        amount = context.signed_int(ids.amount)
         imbalance_fees = ids.price * amount * (2 * ids.LIMIT + ids.price * amount) // (2 * ids.liquidity)
 
         imbalance = context.signed_int(ids.imbalance_fees)
