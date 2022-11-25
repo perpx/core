@@ -7,7 +7,7 @@ cairo-path = ["./lib/cairo_contracts_git/src", "./lib/cairo_math_64x61_git/contr
 exchange = ["contracts/perpx_v1_exchange.cairo"]
 
 [build]
-output = "./starknet-artifacts/protostar"
+compiled-contracts-dir = "./starknet-artifacts/protostar"
 
 [test]
 cairo-path = ["./protostar-test/", "./lib/cairo_contracts_git/src"]

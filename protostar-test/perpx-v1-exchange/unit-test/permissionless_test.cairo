@@ -20,6 +20,7 @@ from contracts.constants.perpx_constants import (
     RANGE_CHECK_BOUND,
     LIMIT,
     LIQUIDITY_PRECISION,
+    LIQUIDITY_LIMIT,
     MIN_LIQUIDITY,
     VOLATILITY_FEE_RATE_PRECISION,
     MAX_LIQUIDATOR_PAY_OUT,
@@ -35,6 +36,7 @@ from contracts.perpx_v1_exchange.structures import Operation
 const OWNER = 12345;
 const ACCOUNT = 123;
 const INSTRUMENT_COUNT = 10;
+const INITIAL_LIQUIDITY = MIN_LIQUIDITY * 10;
 const INSTRUMENT = 1;
 const MATH64X61_FRACT_PART = 2 ** 61;
 const LOW_LIMIT = 10 ** 4;
@@ -86,8 +88,8 @@ func __setup__{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
         store(ids.address, "storage_instrument_count", [ids.INSTRUMENT_COUNT])
         store(ids.address, "storage_queue_limit", [100])
         for i in range(ids.INSTRUMENT_COUNT):
-            store(ids.address, "storage_liquidity", [ids.MIN_LIQUIDITY * 10], key=[2**i])
-            store(ids.address, "storage_shares", [ids.MIN_LIQUIDITY * 1000], key=[2**i])
+            store(ids.address, "storage_liquidity", [ids.INITIAL_LIQUIDITY], key=[2**i])
+            store(ids.address, "storage_shares", [100* ids.INITIAL_LIQUIDITY], key=[2**i])
         context.self_address = ids.address 
         max_examples(utils.read_max_examples("./config.yml"))
     %}
@@ -261,7 +263,7 @@ func test_escape_close{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_che
     escape_close(instrument=instrument);
     %{
         fees_change = context.calculate_fees(price, -amount, longs, shorts, liquidity, fee_rate, ids.VOLATILITY_FEE_RATE_PRECISION)
-        new_cost = cost +  -amount * price
+        new_cost = cost +  -amount * price // 10**6
         delta = -new_cost - fees_change - fee
 
         c = context.signed_int(load(context.self_address, "storage_collateral", "felt", key=[ids.ACCOUNT])[0])
@@ -328,7 +330,7 @@ func test_liquidate_negative_margin{
         # calculate the owners margin
         f = sum(fees)
         exit_fees = context.calculate_exit_fees(prices, amounts, longs, shorts, liquidity, fee_rate, ids.VOLATILITY_FEE_RATE_PRECISION)
-        pnl = sum([p*a-c for (p,a,c) in zip(prices, amounts, costs)])
+        pnl = sum([p*a//10**6 -c for (p,a,c) in zip(prices, amounts, costs)])
         margin = ids.collateral + pnl - f - exit_fees
 
         # calculate the minimum margin for the instruments owner
@@ -405,7 +407,7 @@ func test_liquidate_positive_min_payout{
         # calculate the owners margin
         f = sum(fees)
         exit_fees = context.calculate_exit_fees(prices, amounts, longs, shorts, liquidity, fee_rate, ids.VOLATILITY_FEE_RATE_PRECISION)
-        pnl = sum([p*a-c for (p,a,c) in zip(prices, amounts, costs)])
+        pnl = sum([p*a//10**6 -c for (p,a,c) in zip(prices, amounts, costs)])
         margin = pnl - f - exit_fees
 
         # calculate the minimum margin for the instruments owner
@@ -496,7 +498,7 @@ func test_liquidate_positive_min_max_payout{
         # calculate the owners margin
         f = sum(fees)
         exit_fees = context.calculate_exit_fees(prices, amounts, longs, shorts, liquidity, fee_rate, ids.VOLATILITY_FEE_RATE_PRECISION)
-        pnl = sum([p*a-c for (p,a,c) in zip(prices, amounts, costs)])
+        pnl = sum([p*a//10**6-c for (p,a,c) in zip(prices, amounts, costs)])
         margin = pnl - f - exit_fees
 
         # calculate the minimum margin for the instruments owner
@@ -584,7 +586,7 @@ func test_liquidate_positive_max_payout{
         # calculate the owners margin
         f = sum(fees)
         exit_fees = context.calculate_exit_fees(prices, amounts, longs, shorts, liquidity, fee_rate, ids.VOLATILITY_FEE_RATE_PRECISION)
-        pnl = sum([p*a-c for (p,a,c) in zip(prices, amounts, costs)])
+        pnl = sum([p*a//10**6-c for (p,a,c) in zip(prices, amounts, costs)])
         margin = pnl - f - exit_fees
 
         # calculate the minimum margin for the instruments owner
@@ -760,8 +762,7 @@ func test_remove_collateral_no_position{
 @external
 func setup_add_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
     %{
-        limit = (ids.LIMIT//100 - ids.MIN_LIQUIDITY*10)
-        given(amount_1=strategy.integers(1, limit), 
+        given(amount_1=strategy.integers(1, ids.LIQUIDITY_LIMIT - ids.INITIAL_LIQUIDITY - 1), 
         random=strategy.felts())
     %}
     return ();
@@ -778,7 +779,7 @@ func test_add_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_ch
     // prank the approval and the add liquidity calls
     %{
         ids.address = context.self_address
-        ids.amount_2 = (ids.LIMIT//100 - ids.MIN_LIQUIDITY*10) - ids.amount_1
+        ids.amount_2 = ids.LIQUIDITY_LIMIT - ids.INITIAL_LIQUIDITY - ids.amount_1
         start_prank(ids.ACCOUNT)
     %}
     ERC20.approve(spender=address, amount=Uint256(2 * LIMIT, 0));
@@ -790,10 +791,12 @@ func test_add_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_ch
         user_stake = load(context.self_address, "storage_user_stake", "Stake", key=[ids.ACCOUNT, ids.INSTRUMENT])
         account_balance = load(context.self_address, "ERC20_balances", "Uint256", key=[ids.ACCOUNT])
         exchange_balance = load(context.self_address, "ERC20_balances", "Uint256", key=[ids.address])
+        shares = load(context.self_address, "storage_shares", "felt", key=[ids.INSTRUMENT])[0]
 
         assert user_stake[0] == ids.amount_1*100, f'user stake shares error, expected {ids.amount_1 * 100}, got {user_stake[0]}'
         assert account_balance == [ids.RANGE_CHECK_BOUND-1-ids.amount_1, 0], f'account balance error, expected [{ids.RANGE_CHECK_BOUND-1-ids.amount_1}, 0] got {account_balance}'
         assert exchange_balance == [ids.amount_1, 0], f'exchange balance error, expected [{ids.amount_1}, 0] got {exchange_balance}'
+        liq = ids.MIN_LIQUIDITY * 10 + ids.amount_1
     %}
 
     // add liquidity
@@ -801,7 +804,7 @@ func test_add_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_ch
     %{
         liq = ids.MIN_LIQUIDITY * 10 + ids.amount_1
         stake = load(context.self_address, "storage_user_stake", "Stake", key=[ids.ACCOUNT, ids.INSTRUMENT])
-        assert stake[0] == user_stake[0] + ids.amount_2*user_stake[0]//liq, f'user stake shares error, expected {user_stake[0] + ids.amount_2*user_stake[0]//liq}, got {stake[0]}'
+        assert stake[0] == user_stake[0] + ids.amount_2*shares//liq, f'user stake shares error, expected {user_stake[0] + ids.amount_2*shares//liq}, got {stake[0]}'
     %}
 
     return ();
@@ -811,7 +814,7 @@ func test_add_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_ch
 
 @external
 func setup_remove_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
-    %{ given(provide_amount=strategy.integers(1, ids.LIMIT//100), remove_random=strategy.felts()) %}
+    %{ given(provide_amount=strategy.integers(1, ids.LIQUIDITY_LIMIT - ids.INITIAL_LIQUIDITY - 1), remove_random=strategy.felts()) %}
     return ();
 }
 

@@ -156,7 +156,7 @@ func test_calculate_pnl{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_ch
         prices = [randint(1, ids.LIMIT) for i in range(ids.length)]
         amounts = [randint(-ids.LIMIT//prices[i], ids.LIMIT//prices[i]) for i in range(ids.length)]
         costs = [randint(-ids.LIMIT, ids.LIMIT) for i in range(ids.length)]
-        pnl = sum([prices[i]*amounts[i] - costs[i] for i in range(ids.length)])
+        pnl = sum([prices[i]*amounts[i]//10**6 - costs[i] for i in range(ids.length)])
 
         for (i, bit) in enumerate(sample_instruments):
             store(context.self_address, "storage_oracles", [prices[i]], key=[2**bit])

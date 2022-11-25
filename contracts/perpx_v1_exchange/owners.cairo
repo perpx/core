@@ -39,8 +39,9 @@ from contracts.perpx_v1_exchange.structures import Parameter, QueuedOperation, O
 from contracts.perpx_v1_instrument import update_long_short
 from contracts.library.position import Position, Info
 from contracts.library.fees import Fees
+from contracts.library.mathx6 import Mathx6
 from contracts.library.vault import storage_liquidity
-from contracts.constants.perpx_constants import LIQUIDITY_PRECISION
+from contracts.constants.perpx_constants import LIQUIDITY_PRECISION, LIMIT
 from contracts.utils.access_control import assert_only_owner
 from lib.cairo_math_64x61_git.contracts.cairo_math_64x61.math64x61 import Math64x61
 
@@ -87,9 +88,9 @@ func update_prices{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_p
     _update_prices(
         prices_len=prices_len, prices=prices, mult=1, instrument=0, instruments=instruments
     );
-    _execute_queued_operations();
     let (count) = storage_instrument_count.read();
     _update_volatility(instrument_count=count, mult=1, ts=ts);
+    _execute_queued_operations();
     storage_last_price_update_ts.write(ts);
     return ();
 }
@@ -154,23 +155,21 @@ func _update_prices{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_
     let (q, r) = unsigned_div_rem(instruments, 2);
     if (r == 1) {
         storage_oracles.write(mult, [prices]);
-        _update_prices(
+        return _update_prices(
             prices_len=prices_len - 1,
             prices=prices + 1,
             mult=mult * 2,
             instrument=instrument + 1,
             instruments=q,
         );
-    } else {
-        _update_prices(
-            prices_len=prices_len,
-            prices=prices,
-            mult=mult * 2,
-            instrument=instrument + 1,
-            instruments=q,
-        );
     }
-    return ();
+    return _update_prices(
+        prices_len=prices_len,
+        prices=prices,
+        mult=mult * 2,
+        instrument=instrument + 1,
+        instruments=q,
+    );
 }
 
 // @notice Update the margin parameters
@@ -330,6 +329,15 @@ func _trade{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
     caller: felt, amount: felt, instrument: felt
 ) {
     alloc_locals;
+    let (price) = storage_oracles.read(instrument);
+    tempvar s = Mathx6.mul(price, amount);
+    tempvar trading_size = abs_value(s);
+    let is_valid_trade = is_le(trading_size, LIMIT);
+
+    if (is_valid_trade == 0) {
+        return ();
+    }
+
     // get current margin requirements
     let (local instruments) = storage_user_instruments.read(caller);
     let (collateral) = storage_collateral.read(caller);
@@ -340,7 +348,6 @@ func _trade{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
     let (min_margin) = _calculate_margin_requirement(owner=caller, instruments=instruments, mult=1);
 
     // get margin change
-    let (price) = storage_oracles.read(instrument);
     let (parameters: Parameter) = storage_margin_parameters.read(instrument);
     let (volatility) = storage_volatility.read(instrument);
     let min_margin_change = _calculate_margin_requirement_inner(

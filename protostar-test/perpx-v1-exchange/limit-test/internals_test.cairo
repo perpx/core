@@ -107,7 +107,7 @@ func test_calculate_pnl_limit{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, ra
     %{
         signed_cost = context.signed_int(ids.cost)
         signed_amount = context.signed_int(ids.amount)
-        pnl = ids.INSTRUMENT_COUNT * (ids.price * signed_amount - signed_cost)
+        pnl = ids.INSTRUMENT_COUNT * (ids.price * signed_amount // 10**6 - signed_cost)
         calc_pnl = context.signed_int(ids.pnl)
         assert pnl == calc_pnl, f'pnl error, expected {pnl}, got {calc_pnl}'
     %}
@@ -161,7 +161,7 @@ func test_calculate_exit_fees_limit{
     %{ ids.instruments = 2**ids.INSTRUMENT_COUNT - 1 %}
 
     %{
-        imbalance_fee_function = lambda p, a, l, s, n: p*a*(2*l*p + p*a - 2*s*p)//(2*n)
+        imbalance_fee_function = lambda p, a, l, s, n: p*a*(2*l*p + p*a - 2*s*p)//10**12//(2*n)
         for i in range(ids.INSTRUMENT_COUNT):
             store(context.self_address, "storage_oracles", [ids.price], key=[2**i])
             store(context.self_address, "storage_positions", [0, 0, ids.amount], key=[ids.ACCOUNT, 2**i])
