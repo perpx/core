@@ -130,7 +130,7 @@ func test_update_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range
 
 @external
 func setup_update_longs{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
-    %{ given(amount=strategy.integers(-ids.INITIAL_LONGS, ids.RANGE_CHECK_BOUND - ids.INITIAL_LONGS).filter(lambda x: x != 0)) %}
+    %{ given(amount=strategy.integers(-ids.INITIAL_LONGS, ids.RANGE_CHECK_BOUND - ids.INITIAL_LONGS - 1).filter(lambda x: x != 0)) %}
     return ();
 }
 
@@ -152,7 +152,7 @@ func test_update_longs{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_che
 
 @external
 func setup_update_shorts{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
-    %{ given(amount=strategy.integers(-ids.INITIAL_SHORTS, ids.RANGE_CHECK_BOUND - ids.INITIAL_SHORTS).filter(lambda x: x != 0)) %}
+    %{ given(amount=strategy.integers(-ids.INITIAL_SHORTS, ids.RANGE_CHECK_BOUND - ids.INITIAL_SHORTS - 1).filter(lambda x: x != 0)) %}
     return ();
 }
 
