@@ -1082,7 +1082,7 @@ func test_execute_queued_operation{syscall_ptr: felt*, pedersen_ptr: HashBuiltin
         k_scaled = np.array(k, dtype=float)/2**61
         prices_scaled = np.array(prices)/ids.LIQUIDITY_PRECISION
         amounts_scaled = np.array(amounts)/ids.LIQUIDITY_PRECISION
-        size = np.multiply(prices_scaled, np.absolute(amounts_scaled))
+        size = np.multiply(prices_scaled, np.absolute(amounts_scaled))/10**6
         min_margin = context.calculate_margin_requirement(v_scaled, k_scaled, size) * ids.LIQUIDITY_PRECISION
 
         for (i, instr) in enumerate(sample_instruments):
@@ -1140,6 +1140,7 @@ func test_execute_queued_operation{syscall_ptr: felt*, pedersen_ptr: HashBuiltin
                             longs[index] += amount
                         else:
                             shorts[index] += abs(amount)
+                        min_margin += min_margin_change
                 else:
                     sign_size = math.copysign(1, size)
                     sign_amount = math.copysign(1, amount)
@@ -1179,7 +1180,8 @@ func test_execute_queued_operation{syscall_ptr: felt*, pedersen_ptr: HashBuiltin
             if op[4] == 2:
                 # check margin requirement is met
                 temp_margin = margin - op[1]
-                if min_margin < temp_margin:
+                temp_collateral = collateral - op[1]
+                if min_margin < temp_margin and temp_collateral > 0:
                     collateral -= op[1]
                     margin -= op[1]
 

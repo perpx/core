@@ -20,6 +20,7 @@ from contracts.constants.perpx_constants import (
     RANGE_CHECK_BOUND,
     LIMIT,
     LIQUIDITY_PRECISION,
+    LIQUIDITY_LIMIT,
     MIN_LIQUIDITY,
     VOLATILITY_FEE_RATE_PRECISION,
     MAX_LIQUIDATOR_PAY_OUT,
@@ -35,6 +36,7 @@ from contracts.perpx_v1_exchange.structures import Operation
 const OWNER = 12345;
 const ACCOUNT = 123;
 const INSTRUMENT_COUNT = 10;
+const INITIAL_LIQUIDITY = MIN_LIQUIDITY * 10;
 const INSTRUMENT = 1;
 const MATH64X61_FRACT_PART = 2 ** 61;
 const LOW_LIMIT = 10 ** 4;
@@ -86,8 +88,8 @@ func __setup__{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
         store(ids.address, "storage_instrument_count", [ids.INSTRUMENT_COUNT])
         store(ids.address, "storage_queue_limit", [100])
         for i in range(ids.INSTRUMENT_COUNT):
-            store(ids.address, "storage_liquidity", [ids.MIN_LIQUIDITY * 10], key=[2**i])
-            store(ids.address, "storage_shares", [ids.MIN_LIQUIDITY * 1000], key=[2**i])
+            store(ids.address, "storage_liquidity", [ids.INITIAL_LIQUIDITY], key=[2**i])
+            store(ids.address, "storage_shares", [100* ids.INITIAL_LIQUIDITY], key=[2**i])
         context.self_address = ids.address 
         max_examples(utils.read_max_examples("./config.yml"))
     %}
@@ -260,28 +262,23 @@ func test_escape_close{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_che
     // escape close
     escape_close(instrument=instrument);
     %{
-        <<<<<<< HEAD
-                fees_change = context.calculate_fees(price, -amount, longs, shorts, liquidity, fee_rate, ids.VOLATILITY_FEE_RATE_PRECISION)
-                new_cost = cost +  -amount * price
-        =======
-                fees_change = utils.calculate_fees(price, -amount, longs, shorts, liquidity, fee_rate, ids.VOLATILITY_FEE_RATE_PRECISION)
-                new_cost = cost +  -amount * price // 10**6
-        >>>>>>> 790903c (fix: liquidity limit correction)
-                delta = -new_cost - fees_change - fee
+        fees_change = context.calculate_fees(price, -amount, longs, shorts, liquidity, fee_rate, ids.VOLATILITY_FEE_RATE_PRECISION)
+        new_cost = cost +  -amount * price // 10**6
+        delta = -new_cost - fees_change - fee
 
-                c = context.signed_int(load(context.self_address, "storage_collateral", "felt", key=[ids.ACCOUNT])[0])
-                position = load(context.self_address, "storage_positions", "Info", key=[ids.ACCOUNT, 2**instrument])
-                new_instruments = load(context.self_address, "storage_user_instruments", "felt", key=[ids.ACCOUNT])[0]
-                assert position == [0, 0, 0], f'position error, expected [0, 0, 0], got {position}'
-                assert c == collateral + delta, f'collateral error, expected {collateral + delta}, got {collateral}'
-                assert new_instruments == 0, f'instruments error, expected 0, got {new_instruments}'
+        c = context.signed_int(load(context.self_address, "storage_collateral", "felt", key=[ids.ACCOUNT])[0])
+        position = load(context.self_address, "storage_positions", "Info", key=[ids.ACCOUNT, 2**instrument])
+        new_instruments = load(context.self_address, "storage_user_instruments", "felt", key=[ids.ACCOUNT])[0]
+        assert position == [0, 0, 0], f'position error, expected [0, 0, 0], got {position}'
+        assert c == collateral + delta, f'collateral error, expected {collateral + delta}, got {collateral}'
+        assert new_instruments == 0, f'instruments error, expected 0, got {new_instruments}'
 
-                if amount > 0:
-                    new_longs = load(context.self_address, "storage_longs", "felt", key=[2**instrument])[0]
-                    assert new_longs == longs - amount, f'longs error, expected {longs - amount}, got {new_longs}'
-                else:
-                    new_shorts = load(context.self_address, "storage_shorts", "felt", key=[2**instrument])[0]
-                    assert new_shorts == shorts - abs(amount), f'shorts error, expected {shorts - abs(amount)}, got {new_shorts}'
+        if amount > 0:
+            new_longs = load(context.self_address, "storage_longs", "felt", key=[2**instrument])[0]
+            assert new_longs == longs - amount, f'longs error, expected {longs - amount}, got {new_longs}'
+        else:
+            new_shorts = load(context.self_address, "storage_shorts", "felt", key=[2**instrument])[0]
+            assert new_shorts == shorts - abs(amount), f'shorts error, expected {shorts - abs(amount)}, got {new_shorts}'
     %}
     return ();
 }
@@ -312,55 +309,50 @@ func test_liquidate_negative_margin{
 
     // create fake positions for the user
     %{
-                from random import randint, sample
-                import numpy as np
-                length = ids.collateral % ids.INSTRUMENT_COUNT + 1
-                sample_instruments = sample(range(0, ids.INSTRUMENT_COUNT), length)
-                instruments = sum([2**i for i in sample_instruments]) 
+        from random import randint, sample
+        import numpy as np
+        length = ids.collateral % ids.INSTRUMENT_COUNT + 1
+        sample_instruments = sample(range(0, ids.INSTRUMENT_COUNT), length)
+        instruments = sum([2**i for i in sample_instruments]) 
 
-                # generate random datas which will make the test pass 
-                prices = [randint(1, ids.LIMIT) for i in range(length)]
-                fees = [randint(0, ids.LIMIT) for i in range(length)]
-                costs = [randint(0, ids.LIMIT) for i in range(length)]
-                amounts = [randint(0, ids.LIMIT//prices[i]) for i in range(length)]
-                volatility = [randint(1, ids.MATH64X61_FRACT_PART//(5*10**4)) for i in range(length)]
-                k = [randint(1, 100*ids.MATH64X61_FRACT_PART) for i in range(length)]
-                longs = [randint(1, ids.LIMIT//prices[i]) for i in range(length)]
-                shorts = [randint(1, ids.LIMIT//prices[i]) for i in range(length)]
-                liquidity = [randint(1e6, ids.LIMIT) for i in range(length)]
-                fee_rate = randint(0, ids.VOLATILITY_FEE_RATE_PRECISION)
+        # generate random datas which will make the test pass 
+        prices = [randint(1, ids.LIMIT) for i in range(length)]
+        fees = [randint(0, ids.LIMIT) for i in range(length)]
+        costs = [randint(0, ids.LIMIT) for i in range(length)]
+        amounts = [randint(0, ids.LIMIT//prices[i]) for i in range(length)]
+        volatility = [randint(1, ids.MATH64X61_FRACT_PART//(5*10**4)) for i in range(length)]
+        k = [randint(1, 100*ids.MATH64X61_FRACT_PART) for i in range(length)]
+        longs = [randint(1, ids.LIMIT//prices[i]) for i in range(length)]
+        shorts = [randint(1, ids.LIMIT//prices[i]) for i in range(length)]
+        liquidity = [randint(1e6, ids.LIMIT) for i in range(length)]
+        fee_rate = randint(0, ids.VOLATILITY_FEE_RATE_PRECISION)
 
-                # calculate the owners margin
-                f = sum(fees)
-        <<<<<<< HEAD
-                exit_fees = context.calculate_exit_fees(prices, amounts, longs, shorts, liquidity, fee_rate, ids.VOLATILITY_FEE_RATE_PRECISION)
-                pnl = sum([p*a-c for (p,a,c) in zip(prices, amounts, costs)])
-        =======
-                exit_fees = utils.calculate_exit_fees(prices, amounts, longs, shorts, liquidity, fee_rate, ids.VOLATILITY_FEE_RATE_PRECISION)
-                pnl = sum([p*a//10**6 -c for (p,a,c) in zip(prices, amounts, costs)])
-        >>>>>>> 790903c (fix: liquidity limit correction)
-                margin = ids.collateral + pnl - f - exit_fees
+        # calculate the owners margin
+        f = sum(fees)
+        exit_fees = context.calculate_exit_fees(prices, amounts, longs, shorts, liquidity, fee_rate, ids.VOLATILITY_FEE_RATE_PRECISION)
+        pnl = sum([p*a//10**6 -c for (p,a,c) in zip(prices, amounts, costs)])
+        margin = ids.collateral + pnl - f - exit_fees
 
-                # calculate the minimum margin for the instruments owner
-                v_scaled = np.array(volatility)/2**61
-                k_scaled = np.array(k, dtype=float)/2**61
-                prices_scaled = np.array(prices)/ids.LIQUIDITY_PRECISION
-                amounts_scaled = np.array(amounts)/ids.LIQUIDITY_PRECISION
-                size = np.multiply(prices_scaled, np.absolute(amounts_scaled))
-                min_margin = context.calculate_margin_requirement(v_scaled, k_scaled, size) * ids.LIQUIDITY_PRECISION
-                assume(margin < 0 and margin < min_margin)
+        # calculate the minimum margin for the instruments owner
+        v_scaled = np.array(volatility)/2**61
+        k_scaled = np.array(k, dtype=float)/2**61
+        prices_scaled = np.array(prices)/ids.LIQUIDITY_PRECISION
+        amounts_scaled = np.array(amounts)/ids.LIQUIDITY_PRECISION
+        size = np.multiply(prices_scaled, np.absolute(amounts_scaled))
+        min_margin = context.calculate_margin_requirement(v_scaled, k_scaled, size) * ids.LIQUIDITY_PRECISION
+        assume(margin < 0 and margin < min_margin)
 
-                for (i, bit) in enumerate(sample_instruments):
-                    store(context.self_address, "storage_oracles", [prices[i]], key=[2**bit])
-                    store(context.self_address, "storage_positions", [fees[i], costs[i], amounts[i]], key=[ids.ACCOUNT, 2**bit])
-                    store(context.self_address, "storage_volatility", [volatility[i]], key=[2**bit])
-                    store(context.self_address, "storage_margin_parameters", [k[i], 0], key=[2**bit])
-                    store(context.self_address, "storage_longs", [longs[i]], key=[2**bit])
-                    store(context.self_address, "storage_shorts", [shorts[i]], key=[2**bit])
-                    store(context.self_address, "storage_liquidity", [liquidity[i]], key=[2**bit])
-                store(context.self_address, "storage_volatility_fee_rate", [fee_rate])
-                store(context.self_address, "storage_user_instruments", [instruments], key=[ids.ACCOUNT])
-                expect_events({"name": "Liquidate", "data": [ids.ACCOUNT, instruments]})
+        for (i, bit) in enumerate(sample_instruments):
+            store(context.self_address, "storage_oracles", [prices[i]], key=[2**bit])
+            store(context.self_address, "storage_positions", [fees[i], costs[i], amounts[i]], key=[ids.ACCOUNT, 2**bit])
+            store(context.self_address, "storage_volatility", [volatility[i]], key=[2**bit])
+            store(context.self_address, "storage_margin_parameters", [k[i], 0], key=[2**bit])
+            store(context.self_address, "storage_longs", [longs[i]], key=[2**bit])
+            store(context.self_address, "storage_shorts", [shorts[i]], key=[2**bit])
+            store(context.self_address, "storage_liquidity", [liquidity[i]], key=[2**bit])
+        store(context.self_address, "storage_volatility_fee_rate", [fee_rate])
+        store(context.self_address, "storage_user_instruments", [instruments], key=[ids.ACCOUNT])
+        expect_events({"name": "Liquidate", "data": [ids.ACCOUNT, instruments]})
     %}
     liquidate(owner=ACCOUNT);
     %{
@@ -393,43 +385,38 @@ func test_liquidate_positive_min_payout{
 
     // create fake positions for the user
     %{
-                from random import randint, sample
-                import numpy as np
-                length = ids.random % ids.INSTRUMENT_COUNT + 1
-                sample_instruments = sample(range(0, ids.INSTRUMENT_COUNT), length)
-                instruments = sum([2**i for i in sample_instruments]) 
+        from random import randint, sample
+        import numpy as np
+        length = ids.random % ids.INSTRUMENT_COUNT + 1
+        sample_instruments = sample(range(0, ids.INSTRUMENT_COUNT), length)
+        instruments = sum([2**i for i in sample_instruments]) 
 
-                # generate random datas which will make the test pass 
-                factor = 100
-                prices = [factor*ids.MIN_LIQUIDATOR_PAY_OUT//length for i in range(length)]
-                amounts = [ids.LIQUIDITY_PRECISION for i in range(length)]
-                fees = [factor//2 * ids.MIN_LIQUIDATOR_PAY_OUT * ids.LIQUIDITY_PRECISION for i in range(length)]
-                costs = [factor//2 * ids.MIN_LIQUIDATOR_PAY_OUT * ids.LIQUIDITY_PRECISION for i in range(length)]
-                volatility = [randint(1, ids.MATH64X61_FRACT_PART // (5*10**4)) for i in range(length)]
-                k = [randint(1, 100*ids.MATH64X61_FRACT_PART) for i in range(length)]
-                longs = [ids.LIQUIDITY_PRECISION for i in range(length)]
-                shorts = [ids.LIQUIDITY_PRECISION for i in range(length)]
-                liquidity = [ids.LIMIT for i in range(length)]
-                fee_rate = randint(0, ids.VOLATILITY_FEE_RATE_PRECISION)
+        # generate random datas which will make the test pass 
+        factor = 100
+        prices = [factor*ids.MIN_LIQUIDATOR_PAY_OUT//length for i in range(length)]
+        amounts = [ids.LIQUIDITY_PRECISION for i in range(length)]
+        fees = [factor//2 * ids.MIN_LIQUIDATOR_PAY_OUT * ids.LIQUIDITY_PRECISION for i in range(length)]
+        costs = [factor//2 * ids.MIN_LIQUIDATOR_PAY_OUT * ids.LIQUIDITY_PRECISION for i in range(length)]
+        volatility = [randint(1, ids.MATH64X61_FRACT_PART // (5*10**4)) for i in range(length)]
+        k = [randint(1, 100*ids.MATH64X61_FRACT_PART) for i in range(length)]
+        longs = [ids.LIQUIDITY_PRECISION for i in range(length)]
+        shorts = [ids.LIQUIDITY_PRECISION for i in range(length)]
+        liquidity = [ids.LIMIT for i in range(length)]
+        fee_rate = randint(0, ids.VOLATILITY_FEE_RATE_PRECISION)
 
-                # calculate the owners margin
-                f = sum(fees)
-        <<<<<<< HEAD
-                exit_fees = context.calculate_exit_fees(prices, amounts, longs, shorts, liquidity, fee_rate, ids.VOLATILITY_FEE_RATE_PRECISION)
-                pnl = sum([p*a-c for (p,a,c) in zip(prices, amounts, costs)])
-        =======
-                exit_fees = utils.calculate_exit_fees(prices, amounts, longs, shorts, liquidity, fee_rate, ids.VOLATILITY_FEE_RATE_PRECISION)
-                pnl = sum([p*a//10**6 -c for (p,a,c) in zip(prices, amounts, costs)])
-        >>>>>>> 790903c (fix: liquidity limit correction)
-                margin = pnl - f - exit_fees
+        # calculate the owners margin
+        f = sum(fees)
+        exit_fees = context.calculate_exit_fees(prices, amounts, longs, shorts, liquidity, fee_rate, ids.VOLATILITY_FEE_RATE_PRECISION)
+        pnl = sum([p*a//10**6 -c for (p,a,c) in zip(prices, amounts, costs)])
+        margin = pnl - f - exit_fees
 
-                # calculate the minimum margin for the instruments owner
-                v_scaled = np.array(volatility)/2**61
-                k_scaled = np.array(k, dtype=float)/2**61
-                prices_scaled = np.array(prices)/ids.LIQUIDITY_PRECISION
-                amounts_scaled = np.array(amounts)/ids.LIQUIDITY_PRECISION
-                size = np.multiply(prices_scaled, np.absolute(amounts_scaled))
-                min_margin = context.calculate_margin_requirement(v_scaled, k_scaled, size) * ids.LIQUIDITY_PRECISION
+        # calculate the minimum margin for the instruments owner
+        v_scaled = np.array(volatility)/2**61
+        k_scaled = np.array(k, dtype=float)/2**61
+        prices_scaled = np.array(prices)/ids.LIQUIDITY_PRECISION
+        amounts_scaled = np.array(amounts)/ids.LIQUIDITY_PRECISION
+        size = np.multiply(prices_scaled, np.absolute(amounts_scaled))
+        min_margin = context.calculate_margin_requirement(v_scaled, k_scaled, size) * ids.LIQUIDITY_PRECISION
     %}
     // prank the approval and the add collateral calls
     %{
@@ -488,44 +475,39 @@ func test_liquidate_positive_min_max_payout{
 
     // create fake positions for the user
     %{
-                from random import randint, sample
-                import numpy as np
-                length = ids.random % ids.INSTRUMENT_COUNT + 1
-                sample_instruments = sample(range(0, ids.INSTRUMENT_COUNT), length)
-                instruments = sum([2**i for i in sample_instruments]) 
+        from random import randint, sample
+        import numpy as np
+        length = ids.random % ids.INSTRUMENT_COUNT + 1
+        sample_instruments = sample(range(0, ids.INSTRUMENT_COUNT), length)
+        instruments = sum([2**i for i in sample_instruments]) 
 
-                # generate random datas which will make the test pass 
-                factor = 100
-                mean = (ids.MAX_LIQUIDATOR_PAY_OUT - ids.MIN_LIQUIDATOR_PAY_OUT)//2
-                prices = [factor*mean//length for i in range(length)]
-                amounts = [ids.LIQUIDITY_PRECISION for i in range(length)]
-                fees = [factor//2 * mean * ids.LIQUIDITY_PRECISION for i in range(length)]
-                costs = [factor//2 * mean * ids.LIQUIDITY_PRECISION for i in range(length)]
-                volatility = [randint(1, ids.MATH64X61_FRACT_PART // (5*10**4)) for i in range(length)]
-                k = [randint(1, 100*ids.MATH64X61_FRACT_PART) for i in range(length)]
-                longs = [ids.LIQUIDITY_PRECISION for i in range(length)]
-                shorts = [ids.LIQUIDITY_PRECISION for i in range(length)]
-                liquidity = [ids.LIMIT for i in range(length)]
-                fee_rate = randint(0, ids.VOLATILITY_FEE_RATE_PRECISION)
+        # generate random datas which will make the test pass 
+        factor = 100
+        mean = (ids.MAX_LIQUIDATOR_PAY_OUT - ids.MIN_LIQUIDATOR_PAY_OUT)//2
+        prices = [factor*mean//length for i in range(length)]
+        amounts = [ids.LIQUIDITY_PRECISION for i in range(length)]
+        fees = [factor//2 * mean * ids.LIQUIDITY_PRECISION for i in range(length)]
+        costs = [factor//2 * mean * ids.LIQUIDITY_PRECISION for i in range(length)]
+        volatility = [randint(1, ids.MATH64X61_FRACT_PART // (5*10**4)) for i in range(length)]
+        k = [randint(1, 100*ids.MATH64X61_FRACT_PART) for i in range(length)]
+        longs = [ids.LIQUIDITY_PRECISION for i in range(length)]
+        shorts = [ids.LIQUIDITY_PRECISION for i in range(length)]
+        liquidity = [ids.LIMIT for i in range(length)]
+        fee_rate = randint(0, ids.VOLATILITY_FEE_RATE_PRECISION)
 
-                # calculate the owners margin
-                f = sum(fees)
-        <<<<<<< HEAD
-                exit_fees = context.calculate_exit_fees(prices, amounts, longs, shorts, liquidity, fee_rate, ids.VOLATILITY_FEE_RATE_PRECISION)
-                pnl = sum([p*a-c for (p,a,c) in zip(prices, amounts, costs)])
-        =======
-                exit_fees = utils.calculate_exit_fees(prices, amounts, longs, shorts, liquidity, fee_rate, ids.VOLATILITY_FEE_RATE_PRECISION)
-                pnl = sum([p*a//10**6-c for (p,a,c) in zip(prices, amounts, costs)])
-        >>>>>>> 790903c (fix: liquidity limit correction)
-                margin = pnl - f - exit_fees
+        # calculate the owners margin
+        f = sum(fees)
+        exit_fees = context.calculate_exit_fees(prices, amounts, longs, shorts, liquidity, fee_rate, ids.VOLATILITY_FEE_RATE_PRECISION)
+        pnl = sum([p*a//10**6-c for (p,a,c) in zip(prices, amounts, costs)])
+        margin = pnl - f - exit_fees
 
-                # calculate the minimum margin for the instruments owner
-                v_scaled = np.array(volatility)/2**61
-                k_scaled = np.array(k, dtype=float)/2**61
-                prices_scaled = np.array(prices)/ids.LIQUIDITY_PRECISION
-                amounts_scaled = np.array(amounts)/ids.LIQUIDITY_PRECISION
-                size = np.multiply(prices_scaled, np.absolute(amounts_scaled))
-                min_margin = context.calculate_margin_requirement(v_scaled, k_scaled, size) * ids.LIQUIDITY_PRECISION
+        # calculate the minimum margin for the instruments owner
+        v_scaled = np.array(volatility)/2**61
+        k_scaled = np.array(k, dtype=float)/2**61
+        prices_scaled = np.array(prices)/ids.LIQUIDITY_PRECISION
+        amounts_scaled = np.array(amounts)/ids.LIQUIDITY_PRECISION
+        size = np.multiply(prices_scaled, np.absolute(amounts_scaled))
+        min_margin = context.calculate_margin_requirement(v_scaled, k_scaled, size) * ids.LIQUIDITY_PRECISION
     %}
     // prank the approval and the add collateral calls
     %{
@@ -582,43 +564,38 @@ func test_liquidate_positive_max_payout{
 
     // create fake positions for the user
     %{
-                from random import randint, sample
-                import numpy as np
-                length = ids.random % ids.INSTRUMENT_COUNT + 1
-                sample_instruments = sample(range(0, ids.INSTRUMENT_COUNT), length)
-                instruments = sum([2**i for i in sample_instruments]) 
+        from random import randint, sample
+        import numpy as np
+        length = ids.random % ids.INSTRUMENT_COUNT + 1
+        sample_instruments = sample(range(0, ids.INSTRUMENT_COUNT), length)
+        instruments = sum([2**i for i in sample_instruments]) 
 
-                # generate random datas which will make the test pass 
-                factor = 100
-                prices = [factor*ids.MAX_LIQUIDATOR_PAY_OUT//length for i in range(length)]
-                amounts = [ids.LIQUIDITY_PRECISION for i in range(length)]
-                fees = [factor//2 * ids.MAX_LIQUIDATOR_PAY_OUT * ids.LIQUIDITY_PRECISION for i in range(length)]
-                costs = [factor//2 * ids.MAX_LIQUIDATOR_PAY_OUT * ids.LIQUIDITY_PRECISION for i in range(length)]
-                volatility = [randint(1, ids.MATH64X61_FRACT_PART // (5*10**4)) for i in range(length)]
-                k = [randint(1, 100*ids.MATH64X61_FRACT_PART) for i in range(length)]
-                longs = [ids.LIQUIDITY_PRECISION for i in range(length)]
-                shorts = [ids.LIQUIDITY_PRECISION for i in range(length)]
-                liquidity = [ids.LIMIT for i in range(length)]
-                fee_rate = randint(0, ids.VOLATILITY_FEE_RATE_PRECISION)
+        # generate random datas which will make the test pass 
+        factor = 100
+        prices = [factor*ids.MAX_LIQUIDATOR_PAY_OUT//length for i in range(length)]
+        amounts = [ids.LIQUIDITY_PRECISION for i in range(length)]
+        fees = [factor//2 * ids.MAX_LIQUIDATOR_PAY_OUT * ids.LIQUIDITY_PRECISION for i in range(length)]
+        costs = [factor//2 * ids.MAX_LIQUIDATOR_PAY_OUT * ids.LIQUIDITY_PRECISION for i in range(length)]
+        volatility = [randint(1, ids.MATH64X61_FRACT_PART // (5*10**4)) for i in range(length)]
+        k = [randint(1, 100*ids.MATH64X61_FRACT_PART) for i in range(length)]
+        longs = [ids.LIQUIDITY_PRECISION for i in range(length)]
+        shorts = [ids.LIQUIDITY_PRECISION for i in range(length)]
+        liquidity = [ids.LIMIT for i in range(length)]
+        fee_rate = randint(0, ids.VOLATILITY_FEE_RATE_PRECISION)
 
-                # calculate the owners margin
-                f = sum(fees)
-        <<<<<<< HEAD
-                exit_fees = context.calculate_exit_fees(prices, amounts, longs, shorts, liquidity, fee_rate, ids.VOLATILITY_FEE_RATE_PRECISION)
-                pnl = sum([p*a-c for (p,a,c) in zip(prices, amounts, costs)])
-        =======
-                exit_fees = utils.calculate_exit_fees(prices, amounts, longs, shorts, liquidity, fee_rate, ids.VOLATILITY_FEE_RATE_PRECISION)
-                pnl = sum([p*a//10**6-c for (p,a,c) in zip(prices, amounts, costs)])
-        >>>>>>> 790903c (fix: liquidity limit correction)
-                margin = pnl - f - exit_fees
+        # calculate the owners margin
+        f = sum(fees)
+        exit_fees = context.calculate_exit_fees(prices, amounts, longs, shorts, liquidity, fee_rate, ids.VOLATILITY_FEE_RATE_PRECISION)
+        pnl = sum([p*a//10**6-c for (p,a,c) in zip(prices, amounts, costs)])
+        margin = pnl - f - exit_fees
 
-                # calculate the minimum margin for the instruments owner
-                v_scaled = np.array(volatility)/2**61
-                k_scaled = np.array(k, dtype=float)/2**61
-                prices_scaled = np.array(prices)/ids.LIQUIDITY_PRECISION
-                amounts_scaled = np.array(amounts)/ids.LIQUIDITY_PRECISION
-                size = np.multiply(prices_scaled, np.absolute(amounts_scaled))
-                min_margin = context.calculate_margin_requirement(v_scaled, k_scaled, size) * ids.LIQUIDITY_PRECISION
+        # calculate the minimum margin for the instruments owner
+        v_scaled = np.array(volatility)/2**61
+        k_scaled = np.array(k, dtype=float)/2**61
+        prices_scaled = np.array(prices)/ids.LIQUIDITY_PRECISION
+        amounts_scaled = np.array(amounts)/ids.LIQUIDITY_PRECISION
+        size = np.multiply(prices_scaled, np.absolute(amounts_scaled))
+        min_margin = context.calculate_margin_requirement(v_scaled, k_scaled, size) * ids.LIQUIDITY_PRECISION
     %}
     // prank the approval and the add collateral calls
     %{
@@ -785,8 +762,7 @@ func test_remove_collateral_no_position{
 @external
 func setup_add_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
     %{
-        limit = (ids.LIMIT//100 - ids.MIN_LIQUIDITY*10)
-        given(amount_1=strategy.integers(1, limit), 
+        given(amount_1=strategy.integers(1, ids.LIQUIDITY_LIMIT - ids.INITIAL_LIQUIDITY - 1), 
         random=strategy.felts())
     %}
     return ();
@@ -803,7 +779,7 @@ func test_add_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_ch
     // prank the approval and the add liquidity calls
     %{
         ids.address = context.self_address
-        ids.amount_2 = (ids.LIMIT//100 - ids.MIN_LIQUIDITY*10) - ids.amount_1
+        ids.amount_2 = ids.LIQUIDITY_LIMIT - ids.INITIAL_LIQUIDITY - ids.amount_1
         start_prank(ids.ACCOUNT)
     %}
     ERC20.approve(spender=address, amount=Uint256(2 * LIMIT, 0));
@@ -826,13 +802,9 @@ func test_add_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_ch
     // add liquidity
     add_liquidity(amount=amount_2, instrument=INSTRUMENT);
     %{
-                liq = ids.MIN_LIQUIDITY * 10 + ids.amount_1
-                stake = load(context.self_address, "storage_user_stake", "Stake", key=[ids.ACCOUNT, ids.INSTRUMENT])
-        <<<<<<< HEAD
-                assert stake[0] == user_stake[0] + ids.amount_2*shares//liq, f'user stake shares error, expected {user_stake[0] + ids.amount_2*shares//liq}, got {stake[0]}'
-        =======
-                assert stake[0] == user_stake[0] + ids.amount_2*user_stake[0]//liq, f'user stake shares error, expected {user_stake[0] + ids.amount_2*user_stake[0]//liq}, got {stake[0]}'
-        >>>>>>> 790903c (fix: liquidity limit correction)
+        liq = ids.MIN_LIQUIDITY * 10 + ids.amount_1
+        stake = load(context.self_address, "storage_user_stake", "Stake", key=[ids.ACCOUNT, ids.INSTRUMENT])
+        assert stake[0] == user_stake[0] + ids.amount_2*shares//liq, f'user stake shares error, expected {user_stake[0] + ids.amount_2*shares//liq}, got {stake[0]}'
     %}
 
     return ();
@@ -842,7 +814,7 @@ func test_add_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_ch
 
 @external
 func setup_remove_liquidity{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() {
-    %{ given(provide_amount=strategy.integers(1, ids.LIMIT//100), remove_random=strategy.felts()) %}
+    %{ given(provide_amount=strategy.integers(1, ids.LIQUIDITY_LIMIT - ids.INITIAL_LIQUIDITY - 1), remove_random=strategy.felts()) %}
     return ();
 }
 
