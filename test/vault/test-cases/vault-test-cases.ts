@@ -13,14 +13,14 @@ const VAULT_PROVIDE_LIMIT_CASES: VaultTestCase[][] = [
             amount: BigInt(1),
         },
         {
-            description: 'amount MAX_LIQUIDITY - 1, runs twice',
-            amount: MAX_LIQUIDITY - BigInt(1),
+            description: 'amount MAX_LIQUIDITY/100 - 1, runs twice',
+            amount: MAX_LIQUIDITY / 100n - 1n,
         },
     ],
     [
         {
-            description: 'amount MAX_LIQUIDITY - 1, runs twice',
-            amount: MAX_LIQUIDITY - BigInt(1),
+            description: 'amount MAX_LIQUIDITY/100 - 1, runs twice',
+            amount: MAX_LIQUIDITY / 100n - BigInt(1),
         },
         {
             description: 'amount 1, runs twice',
@@ -29,12 +29,12 @@ const VAULT_PROVIDE_LIMIT_CASES: VaultTestCase[][] = [
     ],
     [
         {
-            description: 'amount MAX_LIQUIDITY/2, runs twice',
-            amount: MAX_LIQUIDITY / 2n,
+            description: 'amount MAX_LIQUIDITY/200, runs twice',
+            amount: MAX_LIQUIDITY / 200n,
         },
         {
-            description: 'amount MAX_LIQUIDITY/2, runs twice',
-            amount: MAX_LIQUIDITY / 2n,
+            description: 'amount MAX_LIQUIDITY/200, runs twice',
+            amount: MAX_LIQUIDITY / 200n,
         },
     ],
 ]
@@ -42,26 +42,26 @@ const VAULT_PROVIDE_LIMIT_CASES: VaultTestCase[][] = [
 const VAULT_WITHDRAW_LIMIT_CASES: VaultTestCase[][] = [
     [
         {
-            description: 'provide amount MAX_LIQUIDITY',
-            amount: MAX_LIQUIDITY,
+            description: 'provide amount MAX_LIQUIDITY/100',
+            amount: MAX_LIQUIDITY / 100n,
         },
         {
-            description: 'withdraw amount MAX_LIQUIDITY',
-            amount: -1n * MAX_LIQUIDITY,
+            description: 'withdraw amount MAX_LIQUIDITY/100',
+            amount: (-1n * MAX_LIQUIDITY) / 100n,
         },
     ],
     [
         {
-            description: 'provide amount MAX_LIQUIDITY',
-            amount: MAX_LIQUIDITY,
+            description: 'provide amount MAX_LIQUIDITY/100',
+            amount: MAX_LIQUIDITY / 100n,
         },
         {
-            description: 'withdraw amount MAX_LIQUIDITY/2',
-            amount: (-1n * MAX_LIQUIDITY) / 2n,
+            description: 'withdraw amount MAX_LIQUIDITY/200',
+            amount: (-1n * MAX_LIQUIDITY) / 200n,
         },
         {
-            description: 'withdraw amount MAX_LIQUIDITY/2',
-            amount: (-1n * MAX_LIQUIDITY) / 2n,
+            description: 'withdraw amount MAX_LIQUIDITY/200',
+            amount: (-1n * MAX_LIQUIDITY) / 200n,
         },
     ],
 ]

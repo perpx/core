@@ -8,7 +8,7 @@ interface PositionLiquidateTestCase {
     description: string
     positionUpdate: PositionUpdateTestCase[]
     price: bigint
-    feeBps: bigint
+    fees: bigint
     error?: string
 }
 
@@ -25,15 +25,15 @@ for (const pLiq of priceLiq) {
             for (const aUp of amountUpdate) {
                 for (const fUp of feeUpdate) {
                     tempLiqBase.push({
-                        description: `price ${pLiq}, feeBps ${fLiq}, positionUpdate price ${pUp}, amount ${aUp}, feeBps ${fUp}`,
+                        description: `price ${pLiq}, fees ${fLiq}, positionUpdate price ${pUp}, amount ${aUp}, fees ${fUp}`,
                         price: pLiq,
-                        feeBps: fLiq,
+                        fees: fLiq,
                         positionUpdate: [
                             {
-                                description: `price ${pUp}, amount ${aUp}, feeBps ${fUp}`,
+                                description: `price ${pUp}, amount ${aUp}, fees ${fUp}`,
                                 price: pUp,
                                 amount: aUp,
-                                feeBps: fUp,
+                                fees: fUp,
                             },
                         ],
                     })
@@ -50,65 +50,65 @@ const POSITION_LIQUIDATE_BASE_TEST_CASES_SHORT: PositionLiquidateTestCase[] = [
     // positive amount, positive fees, positive fees update
     {
         description:
-            'price 1500, feeBps 10_000, positionUpdate price 1500, amount 10, feeBps 10_000',
+            'price 1500, fees 10_000, positionUpdate price 1500, amount 10, fees 10_000',
         price: BigInt(1500),
-        feeBps: BigInt(10_000),
+        fees: BigInt(10_000),
         positionUpdate: [POSITION_UPDATE_BASE_TEST_CASES[7]],
     },
     // positive amount, positive fees, negative fees update
     {
         description:
-            'price 1500, feeBps 10_000, positionUpdate price 1500, amount 10, feeBps -10_000',
+            'price 1500, fees 10_000, positionUpdate price 1500, amount 10, fees -10_000',
         price: BigInt(1500),
-        feeBps: BigInt(10_000),
+        fees: BigInt(10_000),
         positionUpdate: [POSITION_UPDATE_BASE_TEST_CASES[15]],
     },
     // positive amount, negative fees, positive fees update
     {
         description:
-            'price 1500, feeBps -10_000, positionUpdate price 1500, amount 10, feeBps 10_000',
+            'price 1500, fees -10_000, positionUpdate price 1500, amount 10, fees 10_000',
         price: BigInt(1500),
-        feeBps: BigInt(-10_000),
+        fees: BigInt(-10_000),
         positionUpdate: [POSITION_UPDATE_BASE_TEST_CASES[7]],
     },
     // positive amount, negative fees, negative fees update
     {
         description:
-            'price 1500, feeBps -10_000, positionUpdate price 1500, amount 10, feeBps -10_000',
+            'price 1500, fees -10_000, positionUpdate price 1500, amount 10, fees -10_000',
         price: BigInt(1500),
-        feeBps: BigInt(-10_000),
+        fees: BigInt(-10_000),
         positionUpdate: [POSITION_UPDATE_BASE_TEST_CASES[15]],
     },
     // negative amount, positive fees, positive fees update
     {
         description:
-            'price 1500, feeBps 10_000, positionUpdate price 1500, amount -10, feeBps 10_000',
+            'price 1500, fees 10_000, positionUpdate price 1500, amount -10, fees 10_000',
         price: BigInt(1500),
-        feeBps: BigInt(10_000),
+        fees: BigInt(10_000),
         positionUpdate: [POSITION_UPDATE_BASE_TEST_CASES[11]],
     },
     // negative amount, negative fees, positive fees update
     {
         description:
-            'price 1500, feeBps -10_000, positionUpdate price 1500, amount -10, feeBps 10_000',
+            'price 1500, fees -10_000, positionUpdate price 1500, amount -10, fees 10_000',
         price: BigInt(1500),
-        feeBps: BigInt(-10_000),
+        fees: BigInt(-10_000),
         positionUpdate: [POSITION_UPDATE_BASE_TEST_CASES[11]],
     },
     // negative amount, positive fees, negative fees update
     {
         description:
-            'price 1500, feeBps 10_000, positionUpdate price 1500, amount -10, feeBps -10_000',
+            'price 1500, fees 10_000, positionUpdate price 1500, amount -10, fees -10_000',
         price: BigInt(1500),
-        feeBps: BigInt(10_000),
+        fees: BigInt(10_000),
         positionUpdate: [POSITION_UPDATE_BASE_TEST_CASES[17]],
     },
     // negative amount, negative fees, negative fees update
     {
         description:
-            'price 1500, feeBps -10_000, positionUpdate price 1500, amount -10, feeBps -10_000',
+            'price 1500, fees -10_000, positionUpdate price 1500, amount -10, fees -10_000',
         price: BigInt(1500),
-        feeBps: BigInt(-10_000),
+        fees: BigInt(-10_000),
         positionUpdate: [POSITION_UPDATE_BASE_TEST_CASES[17]],
     },
 ]
@@ -116,40 +116,40 @@ const POSITION_LIQUIDATE_BASE_TEST_CASES_SHORT: PositionLiquidateTestCase[] = [
 const limitCase: PositionLiquidateTestCase[] = [
     // positive values
     {
-        description: 'price 0, feeBps 0, positionUpdate',
+        description: 'price 0, fees 0, positionUpdate',
         price: BigInt(0),
-        feeBps: BigInt(0),
+        fees: BigInt(0),
         positionUpdate: [],
     },
     {
-        description: 'price 0, feeBps 1_000_000, positionUpdate',
+        description: 'price 0, fees 1_000_000, positionUpdate',
         price: BigInt(0),
-        feeBps: BigInt(1_000_000),
+        fees: BigInt(1_000_000),
         positionUpdate: [],
     },
     {
-        description: 'price 10**13, feeBps 0, positionUpdate',
+        description: 'price 10**13, fees 0, positionUpdate',
         price: BigInt(10 ** 13),
-        feeBps: BigInt(0),
+        fees: BigInt(0),
         positionUpdate: [],
     },
     {
-        description: 'price 10**13, feeBps 1_000_000, positionUpdate',
+        description: 'price 10**13, fees 1_000_000, positionUpdate',
         price: BigInt(10 ** 13),
-        feeBps: BigInt(1_000_000),
+        fees: BigInt(1_000_000),
         positionUpdate: [],
     },
     // negative values
     {
-        description: 'price 0, feeBps -1_000_000, positionUpdate',
+        description: 'price 0, fees -1_000_000, positionUpdate',
         price: BigInt(0),
-        feeBps: BigInt(-1_000_000),
+        fees: BigInt(-1_000_000),
         positionUpdate: [],
     },
     {
-        description: 'price 10**13, feeBps -1_000_000, positionUpdate',
+        description: 'price 10**13, fees -1_000_000, positionUpdate',
         price: BigInt(10 ** 13),
-        feeBps: BigInt(-1_000_000),
+        fees: BigInt(-1_000_000),
         positionUpdate: [],
     },
 ]
@@ -161,7 +161,7 @@ for (const casLiq of limitCase) {
         temp.push({
             description: casLiq.description + casUp[0].description,
             price: casLiq.price,
-            feeBps: casLiq.feeBps,
+            fees: casLiq.fees,
             positionUpdate: casUp,
         })
     }

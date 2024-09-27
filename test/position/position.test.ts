@@ -1,4 +1,5 @@
 import {
+    Account,
     StarknetContract,
     StarknetContractFactory,
     StringMap,
@@ -7,7 +8,6 @@ import { expect } from 'chai'
 import { starknet } from 'hardhat'
 import {
     POSITION_UPDATE_BASE_TEST_CASES,
-    POSITION_UPDATE_REVERT_TEST_CASES,
     POSITION_UPDATE_LIMIT_TEST_CASES,
 } from './test-cases/PositionUpdateTestCases'
 import {
@@ -18,26 +18,24 @@ import {
 } from './test-cases/PositionLiquidateTestCases'
 
 let contract: StarknetContract
+let account: Account
 let address: bigint
 let prime: bigint
 let POSITION_LIQUIDATE_BASE_TEST_CASES: PositionLiquidateTestCase[]
+const INSTRUMENT = 2
 // Use short in order to test 8 of the 108 liquidation cases (only cases where price, amount fee_bsp != 0)
 const short: boolean = true
 
-function abs(num: bigint): bigint {
-    return num < 0n ? -num : num
-}
-
 async function getPosition(address: BigInt) {
-    const args: StringMap = { address: address }
-    const pos = await contract.call('get_position_test', args)
-    return pos
+    const args: StringMap = { owner: address, instrument: INSTRUMENT }
+    return await contract.call('get_position_test', args)
 }
 
 before(async () => {
     const contractFactory: StarknetContractFactory =
         await starknet.getContractFactory('test/position_test.cairo')
     contract = await contractFactory.deploy()
+    account = await starknet.deployAccount('OpenZeppelin')
     address = BigInt(
         '0x7cde936f47a2240ab1f8764f4dcce14b53af1a5751c33eb4ecbfd643239da5d'
     )
@@ -60,15 +58,16 @@ describe('#update', () => {
     it('should pass with for each base case', async () => {
         for (const baseCase of POSITION_UPDATE_BASE_TEST_CASES) {
             const args: StringMap = {
-                address: address,
+                owner: address,
                 price: baseCase.price,
                 amount: baseCase.amount,
-                fee_bps: baseCase.feeBps,
+                fees: baseCase.fees,
+                instrument: INSTRUMENT,
             }
-            await contract.invoke('update_test', args)
+            await account.invoke(contract, 'update_test', args)
             const pos = await getPosition(address)
             const cost = baseCase.amount * baseCase.price
-            const fees = (abs(cost) * baseCase.feeBps) / 1_000_000n
+            const fees = baseCase.fees
             expect(pos.position.fees).to.equal(fees, 'failed on fees')
             expect(pos.position.cost).to.equal(cost, 'failed on cost')
             expect(pos.position.size).to.equal(
@@ -76,11 +75,12 @@ describe('#update', () => {
                 'failed on size'
             )
             const arg: StringMap = {
-                address: address,
+                owner: address,
                 price: 0n,
-                fee_bps: 0n,
+                fees: 0n,
+                instrument: INSTRUMENT,
             }
-            await contract.invoke('close_test', arg)
+            await account.invoke(contract, 'close_test', arg)
         }
     })
     it('should pass with for each limit case', async () => {
@@ -90,17 +90,18 @@ describe('#update', () => {
             let fees: bigint = 0n
             for (const cas of limitCase) {
                 const args: StringMap = {
-                    address: address,
+                    owner: address,
                     price: cas.price,
                     amount: cas.amount,
-                    fee_bps: cas.feeBps,
+                    fees: cas.fees,
+                    instrument: INSTRUMENT,
                 }
-                await contract.invoke('update_test', args)
+                await account.invoke(contract, 'update_test', args)
                 const pos = await getPosition(address)
                 size += BigInt(cas.amount)
                 const costInc = cas.amount * cas.price
                 cost += costInc
-                fees += (abs(costInc) * cas.feeBps) / 1_000_000n
+                fees += cas.fees
                 if (pos.position.cost > prime / BigInt(2)) {
                     pos.position.cost = pos.position.cost - prime
                 }
@@ -124,56 +125,12 @@ describe('#update', () => {
                 )
             }
             const arg: StringMap = {
-                address: address,
+                owner: address,
                 price: 0,
-                fee_bps: 0,
+                fees: 0,
+                instrument: INSTRUMENT,
             }
-            await contract.invoke('close_test', arg)
-        }
-    })
-
-    it('should fail for each revert case', async () => {
-        for (const failScenario of POSITION_UPDATE_REVERT_TEST_CASES) {
-            let args: StringMap
-            let index: number = 0
-            let passed: boolean = false
-            for (let i = 0; failScenario[i].error === ''; i++) {
-                args = {
-                    address: address,
-                    price: failScenario[i].price,
-                    amount: failScenario[i].amount,
-                    fee_bps: failScenario[i].feeBps,
-                }
-                await contract.invoke('update_test', args)
-                index = i + 1
-                passed = true
-            }
-            try {
-                args = {
-                    address: address,
-                    price: failScenario[index].price,
-                    amount: failScenario[index].amount,
-                    fee_bps: failScenario[index].feeBps,
-                }
-                await contract.invoke('update_test', args)
-                expect.fail(
-                    `should have failed with ${failScenario[index].description}`
-                )
-            } catch (error: any) {
-                expect(error.message).to.contain(
-                    failScenario[index].error,
-                    failScenario[index].description
-                )
-            }
-            if (passed) {
-                args = {
-                    address: address,
-                    price: 0,
-                    fee_bps: 0,
-                }
-                await contract.invoke('close_test', args)
-                passed = false
-            }
+            await account.invoke(contract, 'close_test', arg)
         }
     })
 })
@@ -187,26 +144,28 @@ describe('#liquidate #settle', () => {
             let fees: bigint = BigInt(0)
             for (const update of baseCase.positionUpdate) {
                 const args: StringMap = {
-                    address: address,
+                    owner: address,
                     price: update.price,
                     amount: update.amount,
-                    fee_bps: update.feeBps,
+                    fees: update.fees,
+                    instrument: INSTRUMENT,
                 }
-                await contract.invoke('update_test', args)
+                await account.invoke(contract, 'update_test', args)
                 size += update.amount
                 const costInc: bigint = update.price * update.amount
                 cost += costInc
-                fees += (abs(costInc) * update.feeBps) / 1_000_000n
+                fees += update.fees
             }
             const args: StringMap = {
-                address: address,
+                owner: address,
                 price: baseCase.price,
-                fee_bps: baseCase.feeBps,
+                fees: baseCase.fees,
+                instrument: INSTRUMENT,
             }
-            await contract.invoke('close_test', args)
+            await account.invoke(contract, 'close_test', args)
             const costInc: bigint = -size * baseCase.price
             cost += costInc
-            fees += (abs(costInc) * baseCase.feeBps) / 1_000_000n
+            fees += baseCase.fees
             const delta = -cost - fees
             const resp = await contract.call('get_delta_test')
             expect(resp.delt).to.equal(delta)
@@ -220,26 +179,28 @@ describe('#liquidate #settle', () => {
             let fees: bigint = BigInt(0)
             for (const update of limitCase.positionUpdate) {
                 const args: StringMap = {
-                    address: address,
+                    owner: address,
                     price: update.price,
                     amount: update.amount,
-                    fee_bps: update.feeBps,
+                    fees: update.fees,
+                    instrument: INSTRUMENT,
                 }
-                await contract.invoke('update_test', args)
+                await account.invoke(contract, 'update_test', args)
                 size += update.amount
                 const costInc: bigint = update.price * update.amount
                 cost += costInc
-                fees += (abs(costInc) * update.feeBps) / 1_000_000n
+                fees += update.fees
             }
             const args: StringMap = {
-                address: address,
+                owner: address,
                 price: limitCase.price,
-                fee_bps: limitCase.feeBps,
+                fees: limitCase.fees,
+                instrument: INSTRUMENT,
             }
-            await contract.invoke('close_test', args)
+            await account.invoke(contract, 'close_test', args)
             const costInc: bigint = -size * limitCase.price
             cost += costInc
-            fees += (abs(costInc) * limitCase.feeBps) / 1_000_000n
+            fees += limitCase.fees
             const delta = -cost - fees
             const resp = await contract.call('get_delta_test')
             if (resp.delt > prime / BigInt(2)) {

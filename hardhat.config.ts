@@ -15,6 +15,9 @@ module.exports = {
         timeout: 1000000,
     },
     paths: {
-        cairoPaths: ['./lib/cairo_contracts', './lib/cairo_math_64x61'],
+        cairoPaths: [
+            './lib/cairo_contracts',
+            './lib/cairo_math_64x61',
+        ],
     },
 }

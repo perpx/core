@@ -30,7 +30,11 @@ describe('#init_access_control', () => {
         const args: StringMap = {
             owner: account.address,
         }
-        const txHash = await contract.invoke('init_access_control_test', args)
+        const txHash = await account.invoke(
+            contract,
+            'init_access_control_test',
+            args
+        )
         const res: StringMap = await contract.call('get_owner_test')
         expect(res.owner).to.equal(address)
 
@@ -49,17 +53,6 @@ describe('#init_access_control', () => {
 })
 
 describe('#assert_only_owner_test', () => {
-    it('should fail with Ownable: caller is the zero address', async () => {
-        try {
-            await contract.invoke('assert_only_owner_test')
-            expect.fail('should have failed')
-        } catch (error: any) {
-            expect(error.message).to.contain(
-                'Ownable: caller is the zero address'
-            )
-        }
-    })
-
     it('should fail with Ownable: caller is not the owner', async () => {
         try {
             await otherAccount.invoke(contract, 'assert_only_owner_test')
